@@ -22,6 +22,8 @@ pnpm build            # Chrome extension → .output/chrome-mv3, plus dist/ (boo
 | **Userscript** | install `dist/reword.user.js` in Tampermonkey or Violentmonkey | **Alt+Shift+E** or the userscript menu |
 | **Drop-in `<script>`** | serve `dist/reword-dropin.js` from your own site | Opens automatically on `?copyedit=1`, then **Alt+Shift+E**. It stays inert unless the host is localhost, `*.local` or `*.test`, the URL has `?copyedit`, or the tag has `data-always`. `?copyedit=0` switches it off. |
 
+For a non-technical reviewer, build the zip with `pnpm zip` and send it with [docs/reviewer-guide.md](docs/reviewer-guide.md).
+
 `pnpm dev` runs WXT in watch mode and opens a browser with the extension loaded.
 
 ## Use
