@@ -1,7 +1,4 @@
 export default defineBackground(() => {
-  // Content scripts keep the change queue in storage.session.
-  void browser.storage.session.setAccessLevel?.({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' });
-
   browser.action.onClicked.addListener(async (tab) => {
     if (!tab.id || !/^https?:/.test(tab.url ?? 'http:')) return;
     const message = { type: 'reword:toggle' };
