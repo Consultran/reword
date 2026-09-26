@@ -179,7 +179,7 @@ describe('buildPrompt', () => {
 
   it('names the deployment in the header', () => {
     const prompt = buildPrompt([{ ...base, id: 'ch_1', type: 'edit', oldText: 'A', newText: 'A2' }]);
-    expect(prompt).toContain('Deployment: Live site (example.com).');
+    expect(prompt).toContain('Deployment: Custom domain (example.com).');
     expect(prompt).toContain('check out the branch named in the Deployment line');
   });
 });
@@ -203,8 +203,10 @@ describe('describeDeployment', () => {
     expect(describeDeployment('https://dna-site.pages.dev/')).toContain('production deploy');
   });
 
-  it('treats real domains as live and localhost as the checked-out branch', () => {
-    expect(describeDeployment('https://new.donnormanassociates.com/')).toBe('Live site (new.donnormanassociates.com). Apply to the default branch unless told otherwise.');
+  it('asks before switching branches on custom domains, and uses the checked-out branch on localhost', () => {
+    const line = describeDeployment('https://new.donnormanassociates.com/');
+    expect(line).toContain('Custom domain (new.donnormanassociates.com)');
+    expect(line).toContain('confirm with the user before switching');
     expect(describeDeployment('http://localhost:4321/')).toContain('branch currently checked out');
   });
 });

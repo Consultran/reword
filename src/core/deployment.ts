@@ -41,5 +41,5 @@ export function describeDeployment(pageUrl: string): string {
     return `Cloudflare Pages branch preview "${alias}" ("/" and other symbols in the branch are turned into "-"). Match it against git branch -a.`;
   }
 
-  return `Live site (${host}). Apply to the default branch unless told otherwise.`;
+  return `Custom domain (${host}). The URL doesn't name a branch. It's usually the production deploy of the default branch, but it could be a staging site: if you're not already on the default branch, confirm with the user before switching.`;
 }
