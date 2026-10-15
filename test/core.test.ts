@@ -3,6 +3,7 @@ import type { Change, EditChange } from '../src/core/changes';
 import { executeCommand } from '../src/core/commands';
 import { getToolDefinitions } from '../src/core/definitions';
 import { segmentsOf, sourceHints, stableSelector, textOf } from '../src/core/describe';
+import { describeDeployment } from '../src/core/deployment';
 import { buildPrompt } from '../src/core/prompt';
 import { store } from '../src/core/store';
 import { extractText, normalize } from '../src/core/text';
@@ -174,5 +175,38 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('I reviewed 2 pages');
     expect(prompt.indexOf('2. EDIT TEXT')).toBeLessThan(prompt.indexOf('## Page: https://example.com/pricing'));
     expect(prompt.indexOf('3. EDIT TEXT')).toBeGreaterThan(prompt.indexOf('## Page: https://example.com/pricing'));
+  });
+
+  it('names the deployment in the header', () => {
+    const prompt = buildPrompt([{ ...base, id: 'ch_1', type: 'edit', oldText: 'A', newText: 'A2' }]);
+    expect(prompt).toContain('Deployment: Custom domain (example.com).');
+    expect(prompt).toContain('check out the branch named in the Deployment line');
+  });
+});
+
+describe('describeDeployment', () => {
+  it('reads the branch alias from a Workers branch preview', () => {
+    const line = describeDeployment('https://codex-storybrand-copy-review-consultran-website-2026.developer-e11.workers.dev/ifta');
+    expect(line).toContain('Cloudflare Workers preview "codex-storybrand-copy-review-consultran-website-2026"');
+    expect(line).toContain('Remove the Worker name');
+  });
+
+  it('flags a Workers commit preview as not naming the branch', () => {
+    const line = describeDeployment('https://b9876cbe-consultran-website-2026.developer-e11.workers.dev/');
+    expect(line).toContain('commit preview (version b9876cbe)');
+    expect(line).toContain('does not name the branch');
+  });
+
+  it('handles Pages branch, deployment and production URLs', () => {
+    expect(describeDeployment('https://new-hero.dna-site.pages.dev/')).toContain('Pages branch preview "new-hero"');
+    expect(describeDeployment('https://1a2b3c4d.dna-site.pages.dev/')).toContain('does not name the branch');
+    expect(describeDeployment('https://dna-site.pages.dev/')).toContain('production deploy');
+  });
+
+  it('asks before switching branches on custom domains, and uses the checked-out branch on localhost', () => {
+    const line = describeDeployment('https://new.donnormanassociates.com/');
+    expect(line).toContain('Custom domain (new.donnormanassociates.com)');
+    expect(line).toContain('confirm with the user before switching');
+    expect(describeDeployment('http://localhost:4321/')).toContain('branch currently checked out');
   });
 });

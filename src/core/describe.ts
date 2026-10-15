@@ -168,7 +168,7 @@ export function segmentsOf(el: Element): string[] {
 const HINT_ATTRS = [
   "data-component", "data-component-name", "data-sentry-component", "data-sentry-element", "data-sentry-source-file",
   "data-source", "data-source-file", "data-inspector-relative-path", "data-inspector-line", "data-locator", "data-lov-id",
-  "data-v0-t", "data-framer-name", "data-framer-component-type", "data-block", "data-slot", "data-testid",
+  "data-v0-t", "data-astro-source-file", "data-astro-source-loc", "data-framer-name", "data-framer-component-type", "data-block", "data-slot", "data-testid",
 ];
 
 /** Framework/devtool attributes on the element or its ancestors that hint at the source component. */

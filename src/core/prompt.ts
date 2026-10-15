@@ -1,11 +1,13 @@
 // Builds the prompt the user pastes into their coding agent.
 import { serialize, type Change } from "./changes";
+import { describeDeployment } from "./deployment";
 
 /** JSON string syntax, so quotes and line breaks inside the copy stay unambiguous. */
 const quote = (s: string) => JSON.stringify(s);
 const code = (s: string) => "`" + s.replace(/`/g, "'") + "`";
 
 const RULES = `Rules for the coding agent:
+- Before editing, check out the branch named in the Deployment line. If you can't tell which branch it is, stop and ask.
 - Locate each element by searching the codebase for its old text first, then the selector, class names and source hints.
 - If an exact text match fails, the copy may be split across elements or encoded differently: search for each listed search term, and try quote/entity variants (’ vs ' vs &apos; vs {"'"}, “ ” vs ", &amp; vs &, &nbsp;).
 - If a string appears in several files, prefer the one that renders this page/route.
@@ -76,6 +78,7 @@ export function buildPrompt(changes: Change[]): string {
     const header = [
       "I reviewed the live page and want these changes applied to the source code.",
       `${pageLine(page.url, page.title)}  |  ${viewport}`,
+      `Deployment: ${describeDeployment(page.url)}`,
     ];
     if (!changes.length) return [...header, "", "(No changes yet.)"].join("\n");
     return [...header, "", ...changes.flatMap((c, i) => numbered(c, i + 1)), ...tail].join("\n");
@@ -84,6 +87,7 @@ export function buildPrompt(changes: Change[]): string {
   const lines = [
     `I reviewed ${pages.size} pages of the live site and want these changes applied to the source code.`,
     `Site: ${location.origin}  |  ${viewport}`,
+    `Deployment: ${describeDeployment([...pages.values()][0]!.url)}`,
     "",
   ];
   let n = 0;

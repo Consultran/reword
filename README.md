@@ -22,6 +22,8 @@ pnpm build            # Chrome extension → .output/chrome-mv3, plus dist/ (boo
 | **Userscript** | install `dist/reword.user.js` in Tampermonkey or Violentmonkey | **Alt+Shift+E** or the userscript menu |
 | **Drop-in `<script>`** | serve `dist/reword-dropin.js` from your own site | Opens automatically on `?copyedit=1`, then **Alt+Shift+E**. It stays inert unless the host is localhost, `*.local` or `*.test`, the URL has `?copyedit`, or the tag has `data-always`. `?copyedit=0` switches it off. |
 
+For a non-technical reviewer, build the zip with `pnpm zip` and send it with [docs/reviewer-guide.md](docs/reviewer-guide.md).
+
 `pnpm dev` runs WXT in watch mode and opens a browser with the extension loaded.
 
 ## Use
@@ -50,7 +52,7 @@ The panel sits at the bottom right. Drag it by its header, or collapse it.
 **Several pages.** Keep marking up as you move around the site (hold Alt and click a link). Changes from every page of the site go into one session and one prompt, grouped by page. Only the current page's changes are applied live; click a change from another page to go there. Client-side route changes in single-page apps are followed too.
 
 **Persistence.** Your changes survive reloads and navigation within the site:
-- **Extension:** saved in `chrome.storage.session`, per origin. It is cleared when the browser quits, so old edits never end up in a later prompt.
+- **Extension:** saved in `chrome.storage.local`, per origin. It survives a browser restart, so a review can span several days. Click **Clear all** after you send the prompt, or the old changes go into the next one.
 - **Other flavours:** saved in `sessionStorage`, per tab.
 
 When the page loads or re-renders, changes are matched back to elements by selector (and, for text edits, by their text). A change whose element can't be found stays in the list, marked *Not on page*, and still goes into the prompt. Nothing on the page changes while Reword is closed.

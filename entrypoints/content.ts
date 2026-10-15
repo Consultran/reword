@@ -6,19 +6,19 @@ const SITES_KEY = 'reword:sites';
 
 /**
  * Changes are kept per origin so you can queue edits across several pages and
- * reloads. Session storage is wiped when the browser closes, so old edits never
- * leak into a later prompt.
+ * reloads. Local storage survives a browser restart, so a review can span several
+ * days. Changes stay until the reviewer clicks Clear all.
  */
 function extensionStore(): ChangeStore {
   const key = `reword:changes:${location.origin}`;
   return {
     async load() {
-      const got = await browser.storage.session.get(key);
+      const got = await browser.storage.local.get(key);
       return (got[key] as unknown[] | undefined) ?? [];
     },
     async save(changes) {
-      if (changes.length) await browser.storage.session.set({ [key]: changes });
-      else await browser.storage.session.remove(key);
+      if (changes.length) await browser.storage.local.set({ [key]: changes });
+      else await browser.storage.local.remove(key);
     },
   };
 }

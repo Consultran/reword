@@ -1,6 +1,6 @@
 import type { Change } from "./changes";
 
-/** Where a flavour keeps the change list (extension: storage.session per origin; others: sessionStorage). */
+/** Where a flavour keeps the change list (extension: storage.local per origin; others: sessionStorage). */
 export interface ChangeStore {
   load(): Promise<unknown[]>;
   save(changes: Record<string, unknown>[]): Promise<void>;
