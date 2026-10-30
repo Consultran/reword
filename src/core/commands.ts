@@ -248,7 +248,7 @@ const handlers: Record<CommandName, Handler> = {
   },
 
   set_enabled({ enabled }: { enabled: boolean }) {
-    store.set({ enabled, ...(enabled ? {} : { selectedId: null, editingId: null, noteEditingId: null }) });
+    store.set({ enabled, ...(enabled ? {} : { selectedId: null, editingId: null, noteEditingId: null, colorEditingId: null }) });
     return { enabled };
   },
 };

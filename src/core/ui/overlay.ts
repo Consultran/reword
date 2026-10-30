@@ -4,6 +4,7 @@ import { executeCommand } from "../commands";
 import { snippet, stableSelector, truncate } from "../describe";
 import { elementOf, idOf } from "../registry";
 import { store } from "../store";
+import { createColorPicker } from "./colorPicker";
 import { editingElement, startEditing } from "./inlineEdit";
 import { h, icon, isHost, kbd } from "./root";
 
@@ -160,6 +161,7 @@ export function createOverlay(): Overlay {
     h("span", { class: "sep" }),
     parentBtn,
     h("button", { class: "edit", title: "Edit text (or double-click)", onclick: () => onEdit() }, icon("edit"), h("span", {}, "Edit text")),
+    h("button", { class: "color", title: "Color", onclick: () => onColor() }, icon("color"), h("span", {}, "Color")),
     h("button", { class: "danger", title: "Remove", onclick: () => onRemove() }, icon("remove"), h("span", {}, "Remove")),
     h("button", { class: "note", title: "Note", onclick: () => onNote() }, icon("note"), noteLabel),
   );
@@ -178,8 +180,13 @@ export function createOverlay(): Overlay {
   };
   const onNote = () => {
     const id = store.get().selectedId;
-    if (id) store.set({ noteEditingId: id });
+    if (id) store.set({ noteEditingId: id, colorEditingId: null });
   };
+  const onColor = () => {
+    const { selectedId, colorEditingId } = store.get();
+    if (selectedId) store.set({ colorEditingId: colorEditingId === selectedId ? null : selectedId, noteEditingId: null });
+  };
+  const picker = createColorPicker();
 
   // ---- Note editor ----
   const noteText = h("textarea", { placeholder: "“Make this bigger”", "aria-label": "Note for your coding agent" });
@@ -214,7 +221,7 @@ export function createOverlay(): Overlay {
     }
   });
 
-  const layer = h("div", { class: "layer" }, hoverBox, selectedBox, dragSrcBox, dropParent, flashBox, dropLine, pins, tag, bar, noteBox, live);
+  const layer = h("div", { class: "layer" }, hoverBox, selectedBox, dragSrcBox, dropParent, flashBox, dropLine, pins, tag, bar, noteBox, picker.el, live);
 
   // ---- Hover ----
   let hoverEl: Element | null = null;
@@ -431,6 +438,9 @@ export function createOverlay(): Overlay {
       pin.style.display = pr ? "" : "none";
       if (pr) moveTo(pin, Math.min(Math.max(pr.right - 12, 2), innerWidth - 22), Math.max(pr.top - 10, 2));
     }
+
+    picker.frame();
+    bar.querySelector(".color")?.classList.toggle("on", !!s.colorEditingId && s.colorEditingId === s.selectedId);
 
     // Note editor
     const nid = s.noteEditingId;
