@@ -1,7 +1,8 @@
 // The floating changes panel: list, undo/redo, clear all, copy prompt.
-import type { Change } from "../changes";
+import type { Change, ColorValue } from "../changes";
 import { executeCommand } from "../commands";
 import { truncate } from "../describe";
+import { colorCss } from "../engine";
 import { elementOf } from "../registry";
 import { store, type State } from "../store";
 import type { RewordOptions } from "../types";
@@ -21,8 +22,26 @@ function detail(c: Change): (Node | string)[] {
     case "move":
       return [`“${truncate(c.snippet || c.tag, 40)}” ${c.position} “${truncate(c.targetSnippet || "sibling", 40)}”`];
     case "color":
-      return [c.newValue.className ?? c.newValue.hex];
+      return [
+        `${PROPERTY_LABEL[c.property]}: `,
+        swatch(c.oldValue),
+        h("s", {}, colorLabel(c.oldValue)),
+        h("span", { class: "arrow" }, "→"),
+        swatch(c.newValue),
+        colorLabel(c.newValue),
+      ];
   }
+}
+
+const PROPERTY_LABEL = { "background-color": "Background", color: "Text", "border-color": "Border" } as const;
+
+const colorLabel = (v: ColorValue) => (v.alpha === 0 ? "transparent" : (v.className ?? v.hex));
+
+/** A small color chip. The color goes through CSSOM so strict style-src CSPs allow it. */
+export function swatch(v: Pick<ColorValue, "hex" | "alpha">): HTMLElement {
+  const chip = h("span", { class: `swatch${v.alpha === 0 ? " clear" : ""}`, "aria-hidden": "true" });
+  if (v.alpha > 0) chip.style.setProperty("--swatch", colorCss(v));
+  return chip;
 }
 
 function setDisabled(btn: HTMLButtonElement, disabled: boolean) {
@@ -40,7 +59,7 @@ function pagePath(url: string): string {
 }
 
 const KIND_LABEL: Record<Change["type"], string> = { edit: "Edit text", remove: "Remove", note: "Note", move: "Move", color: "Color" };
-const KIND_ICON: Record<Change["type"], IconName> = { edit: "edit", remove: "remove", note: "note", move: "move", color: "edit" };
+const KIND_ICON: Record<Change["type"], IconName> = { edit: "edit", remove: "remove", note: "note", move: "move", color: "color" };
 
 export function createPanel({ prefs, siteToggle }: Pick<RewordOptions, "prefs" | "siteToggle">) {
   const count = h("span", { class: "count" }, "0");

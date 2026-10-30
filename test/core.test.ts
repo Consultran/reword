@@ -217,6 +217,36 @@ describe('buildPrompt', () => {
     expect(json[1]).toMatchObject({ number: 2, note: 'Shorter' });
   });
 
+  it('renders color changes as a class swap', () => {
+    const color = (o: Partial<ColorChange>): ColorChange => ({
+      ...base, id: 'ch_9', type: 'color', property: 'background-color',
+      oldValue: { hex: '#1f1c19', alpha: 1, className: 'dark:bg-zinc-900' },
+      newValue: { hex: '#2b2723', alpha: 1, className: 'dark:bg-zinc-800' },
+      alsoOnElement: ['bg-zinc-50'], ...o,
+    });
+    const p1 = buildPrompt([color({})]);
+    expect(p1).toContain('CHANGE COLOR');
+    expect(p1).toContain('Property: background-color');
+    expect(p1).toContain('Old: dark:bg-zinc-900 (#1f1c19)');
+    expect(p1).toContain('New: dark:bg-zinc-800 (#2b2723)');
+    expect(p1).toContain('Swap the class `dark:bg-zinc-900` for `dark:bg-zinc-800`.');
+    expect(p1).toContain('Also on the element: bg-zinc-50');
+    expect(p1).toContain('CHANGE COLOR: swap the named Tailwind class');
+
+    const p2 = buildPrompt([color({
+      oldValue: { hex: '#000000', alpha: 0, className: null },
+      newValue: { hex: '#2a3b4c', alpha: 1, className: null, closest: { className: 'bg-slate-800', hex: '#1e293b' } },
+      alsoOnElement: [],
+    })]);
+    expect(p2).toContain('Old: transparent (no background set)');
+    expect(p2).toContain('New: #2a3b4c (no matching Tailwind class; closest is bg-slate-800 #1e293b)');
+    expect(p2).not.toContain('Swap the class');
+    expect(p2).not.toContain('Also on the element');
+
+    const p3 = buildPrompt([color({ property: 'color', oldValue: { hex: '#b9b3a3', alpha: 1, className: null }, alsoOnElement: [] })]);
+    expect(p3).toContain('Old: #b9b3a3 (no Tailwind class on this element; the color comes from a component, a parent or CSS)');
+  });
+
   it('groups by page and keeps numbering across pages', () => {
     const other = { key: 'https://example.com/pricing', url: 'https://example.com/pricing', title: 'Pricing' };
     const prompt = buildPrompt([

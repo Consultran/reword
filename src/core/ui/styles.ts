@@ -266,6 +266,17 @@ kbd {
 }
 .item .detail s { color: var(--color-ink-3); text-decoration-color: var(--color-ink-3); }
 .item .detail .arrow { color: var(--color-ink-3); margin: 0 5px; }
+.item .detail .swatch { margin-right: 4px; }
+.item .k-color .k-icon { color: var(--color-accent-text); }
+
+/* Color chip; .clear draws a checkerboard for transparent. */
+.swatch {
+  display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px;
+  background: var(--swatch, transparent); box-shadow: inset 0 0 0 1px oklch(100% 0 0 / .18);
+}
+.swatch.clear {
+  background: repeating-conic-gradient(oklch(60% 0 0) 0 25%, oklch(85% 0 0) 0 50%) 0 0 / 6px 6px;
+}
 .item .x {
   position: relative; flex: none; width: 24px; height: 24px; margin: -2px -2px 0 0; border-radius: 6px;
   display: inline-flex; align-items: center; justify-content: center; color: var(--color-ink-3); opacity: 0;
