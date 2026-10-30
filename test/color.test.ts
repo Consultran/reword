@@ -32,6 +32,6 @@ describe('deltaE', () => {
 describe('STOCK_PALETTE', () => {
   it('has all 26 Tailwind v4 families as oklch', () => {
     expect(Object.keys(STOCK_PALETTE)).toHaveLength(26);
-    expect(STOCK_PALETTE.zinc['900']).toBe('oklch(21% 0.006 285.885)');
+    expect(STOCK_PALETTE.zinc!['900']).toBe('oklch(21% 0.006 285.885)');
   });
 });
