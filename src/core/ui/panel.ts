@@ -20,6 +20,8 @@ function detail(c: Change): (Node | string)[] {
       return [`“${truncate(c.note, 140)}”`];
     case "move":
       return [`“${truncate(c.snippet || c.tag, 40)}” ${c.position} “${truncate(c.targetSnippet || "sibling", 40)}”`];
+    case "color":
+      return [c.newValue.className ?? c.newValue.hex];
   }
 }
 
@@ -37,8 +39,8 @@ function pagePath(url: string): string {
   }
 }
 
-const KIND_LABEL: Record<Change["type"], string> = { edit: "Edit text", remove: "Remove", note: "Note", move: "Move" };
-const KIND_ICON: Record<Change["type"], IconName> = { edit: "edit", remove: "remove", note: "note", move: "move" };
+const KIND_LABEL: Record<Change["type"], string> = { edit: "Edit text", remove: "Remove", note: "Note", move: "Move", color: "Color" };
+const KIND_ICON: Record<Change["type"], IconName> = { edit: "edit", remove: "remove", note: "note", move: "move", color: "edit" };
 
 export function createPanel({ prefs, siteToggle }: Pick<RewordOptions, "prefs" | "siteToggle">) {
   const count = h("span", { class: "count" }, "0");

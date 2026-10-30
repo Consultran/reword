@@ -48,6 +48,8 @@ function describe(c: Change): string[] {
           : `Move ${code(c.selector)}${a} out of ${code(from)} to be ${c.position} ${code(c.targetSelector)}${b} in ${code(c.parentSelector)}.`;
       return ["MOVE", line, `Section: ${c.section}`, ...(c.sourceHints.length ? [`Source hints: ${c.sourceHints.join(", ")}`] : []), `Context HTML: ${code(c.contextHtml)}`];
     }
+    case "color":
+      return ["CHANGE COLOR", ...elementLines(c), `Context HTML: ${code(c.contextHtml)}`];
   }
 }
 

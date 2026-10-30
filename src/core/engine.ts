@@ -1,6 +1,7 @@
 // Applies and un-applies changes on the live DOM. Every DOM mutation Reword
 // makes to the page goes through here, driven by the command layer.
-import type { Change, MoveChange } from "./changes";
+import type { Change, ColorValue, MoveChange } from "./changes";
+import type { ColorProperty } from "./palette";
 import { elementOf } from "./registry";
 
 /** What an edit replaced, restored when the edit is reverted. */
@@ -9,6 +10,47 @@ const originalContent = new WeakMap<Element, { children: Node[] } | { text: Text
 const originalDisplay = new WeakMap<Element, { value: string; priority: string }>();
 /** Where a moved element sat before the move was applied. */
 const originalPlace = new WeakMap<MoveChange, { parent: Element; next: Node | null }>();
+/** Inline color values before a color change was applied, per property. */
+const originalColor = new WeakMap<Element, Map<ColorProperty, { value: string; priority: string }>>();
+
+/** CSS text for a picked color: rgb(r g b / a). */
+export function colorCss(v: Pick<ColorValue, "hex" | "alpha">): string {
+  const n = parseInt(v.hex.slice(1), 16);
+  return `rgb(${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255} / ${v.alpha})`;
+}
+
+function restoreInline(style: CSSStyleDeclaration, property: string, prev: { value: string; priority: string } | undefined) {
+  if (prev?.value) style.setProperty(property, prev.value, prev.priority);
+  else style.removeProperty(property);
+}
+
+function dropEmptyStyle(el: Element) {
+  if (!el.getAttribute("style")) el.removeAttribute("style");
+}
+
+/**
+ * Temporary inline color for the picker's hover and A/B preview. Never touches
+ * the session; `end()` puts back whatever inline value was there at the start.
+ */
+export function previewColor(el: Element, property: ColorProperty): { set(css: string | null): void; end(): void } {
+  const style = (el as HTMLElement).style;
+  const start = style ? { value: style.getPropertyValue(property), priority: style.getPropertyPriority(property) } : undefined;
+  let ended = false;
+  return {
+    set(css) {
+      if (ended || !style) return;
+      if (css === null) restoreInline(style, property, start);
+      else style.setProperty(property, css, "important");
+      dropEmptyStyle(el);
+    },
+    end() {
+      if (ended || !style) return;
+      ended = true;
+      restoreInline(style, property, start);
+      dropEmptyStyle(el);
+    },
+  };
+}
 
 export function apply(change: Change) {
   const el = elementOf(change.elementId);
@@ -46,6 +88,16 @@ export function apply(change: Change) {
       target.parentElement.insertBefore(el, change.position === "before" ? target : target.nextSibling);
       break;
     }
+    case "color": {
+      const style = (el as HTMLElement).style;
+      if (!style) return;
+      let saved = originalColor.get(el);
+      if (!saved) originalColor.set(el, (saved = new Map()));
+      if (!saved.has(change.property))
+        saved.set(change.property, { value: style.getPropertyValue(change.property), priority: style.getPropertyPriority(change.property) });
+      style.setProperty(change.property, colorCss(change.newValue), "important");
+      break;
+    }
   }
 }
 
@@ -79,6 +131,15 @@ export function unapply(change: Change) {
       const next = place.next && place.next.parentNode === place.parent ? place.next : null;
       place.parent.insertBefore(el, next);
       originalPlace.delete(change);
+      break;
+    }
+    case "color": {
+      const style = (el as HTMLElement).style;
+      const saved = originalColor.get(el);
+      if (!style || !saved?.has(change.property)) return;
+      restoreInline(style, change.property, saved.get(change.property));
+      saved.delete(change.property);
+      dropEmptyStyle(el);
       break;
     }
   }

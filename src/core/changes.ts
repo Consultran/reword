@@ -1,5 +1,6 @@
 // The change model. Changes are plain data (serializable to storage) plus a
 // runtime elementId that is re-resolved from `selector` after a reload.
+import type { ColorProperty } from "./palette";
 
 /** The page a change was made on. Changes from every page of a site share one session. */
 export interface PageRef {
@@ -55,7 +56,25 @@ export interface MoveChange extends BaseChange {
   fromParentSelector?: string;
 }
 
-export type Change = EditChange | RemoveChange | NoteChange | MoveChange;
+export interface ColorValue {
+  /** Opaque part, lowercase #rrggbb. */
+  hex: string;
+  /** 0 (transparent) to 1 (opaque). */
+  alpha: number;
+  /** The Tailwind class for this color ("dark:bg-zinc-800/50"), or null when none matches. */
+  className: string | null;
+}
+
+export interface ColorChange extends BaseChange {
+  type: "color";
+  property: ColorProperty;
+  oldValue: ColorValue;
+  newValue: ColorValue & { closest?: { className: string; hex: string } };
+  /** Other palette classes for the same property on the element (other variants). */
+  alsoOnElement: string[];
+}
+
+export type Change = EditChange | RemoveChange | NoteChange | MoveChange | ColorChange;
 export type ChangeType = Change["type"];
 
 /** One reversible step: the change with this id goes from `before` to `after` (null = absent). */
@@ -73,7 +92,7 @@ export interface HistoryEntry {
 }
 
 const RUNTIME_FIELDS = ["elementId", "targetId"] as const;
-const TYPES: ChangeType[] = ["edit", "remove", "note", "move"];
+const TYPES: ChangeType[] = ["edit", "remove", "note", "move", "color"];
 
 export function serialize(change: Change): Record<string, unknown> {
   const out: Record<string, unknown> = { ...change };

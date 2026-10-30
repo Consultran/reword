@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { Change, EditChange } from '../src/core/changes';
+import type { Change, ColorChange, EditChange } from '../src/core/changes';
 import { executeCommand } from '../src/core/commands';
 import { getToolDefinitions } from '../src/core/definitions';
 import { segmentsOf, sourceHints, stableSelector, textOf } from '../src/core/describe';
@@ -129,6 +129,59 @@ describe('commands', () => {
     const tools = getToolDefinitions();
     expect(tools.map((t) => t.name)).toContain('edit_text');
     expect(getToolDefinitions('openai')[0]).toHaveProperty('function.parameters');
+  });
+});
+
+describe('set_color', () => {
+  // happy-dom doesn't inherit custom properties from :root, so the vars sit on the element too.
+  const css = ':root,#side{--color-zinc-900:#1f1c19;--color-zinc-800:#2b2723} .bg-zinc-900{background-color:var(--color-zinc-900)}';
+  beforeEach(async () => {
+    await executeCommand('clear_all');
+    document.head.innerHTML = `<style>${css}</style>`;
+    document.body.innerHTML = '<div id="side" class="bg-zinc-900">x</div>';
+  });
+
+  const idFor = async (selector: string) => {
+    const r = await executeCommand('find_elements', { selector });
+    return (r.data as { elementId: string }[])[0]!.elementId;
+  };
+
+  it('sets a palette color live, records a class swap, and undoes', async () => {
+    const id = await idFor('#side');
+    const r = await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'zinc-800' });
+    expect(r).toMatchObject({ ok: true, data: { changed: true, className: 'bg-zinc-800', hex: '#2b2723' } });
+    const el = document.getElementById('side')!;
+    expect(el.style.getPropertyValue('background-color')).not.toBe('');
+    expect(el.style.getPropertyPriority('background-color')).toBe('important');
+    const c = store.get().changes[0] as ColorChange;
+    expect(c.oldValue).toMatchObject({ className: 'bg-zinc-900', hex: '#1f1c19' });
+    await executeCommand('undo');
+    expect(el.getAttribute('style')).toBeNull();
+  });
+
+  it('collapses repeat picks and drops a pick back to the original', async () => {
+    const id = await idFor('#side');
+    await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'zinc-800' });
+    await executeCommand('set_color', { elementId: id, property: 'background-color', color: '#123456' });
+    expect(store.get().changes).toHaveLength(1);
+    const c = store.get().changes[0] as ColorChange;
+    expect(c.newValue).toMatchObject({ hex: '#123456', className: null });
+    expect(c.newValue.closest).toBeDefined();
+    await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'zinc-900' });
+    expect(store.get().changes).toHaveLength(0);
+  });
+
+  it('keeps one change per property', async () => {
+    const id = await idFor('#side');
+    await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'zinc-800' });
+    await executeCommand('set_color', { elementId: id, property: 'color', color: '#ffffff' });
+    expect(store.get().changes.map((c) => (c as ColorChange).property)).toEqual(['background-color', 'color']);
+  });
+
+  it('rejects colors it cannot read', async () => {
+    const id = await idFor('#side');
+    expect(await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'not-a-color' })).toMatchObject({ ok: false });
+    expect(await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'hsl(0 0% 0%)' })).toMatchObject({ ok: false });
   });
 });
 

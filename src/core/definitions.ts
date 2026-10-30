@@ -88,6 +88,25 @@ export const COMMAND_DEFINITIONS = [
     },
   },
   {
+    name: "set_color",
+    description:
+      "Recolor an element's background, text or border. Shown live on the page. The prompt asks for a Tailwind class swap when the color is a palette color (the site's own palette first, then stock Tailwind). One change per element and property; setting the original color again drops it.",
+    parameters: {
+      type: "object",
+      properties: {
+        elementId,
+        property: { type: "string", enum: ["background-color", "color", "border-color"], description: "Which color to change." },
+        color: {
+          type: "string",
+          description: "A hex like #2b2723, or a palette token like zinc-800, zinc-800/50 or accent.",
+          minLength: 1,
+        },
+      },
+      required: ["elementId", "property", "color"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "revert_change",
     description: "Revert one change from the change list (undoable).",
     parameters: {

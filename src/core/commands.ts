@@ -3,7 +3,9 @@
 // Schemas, mutate via session.commit(), and return structured results.
 import { COMMAND_DEFINITIONS, getDefinition, getToolDefinitions, type CommandName } from "./definitions";
 import { validate } from "./validate";
-import type { Change, EditChange, MoveChange, NoteChange, RemoveChange } from "./changes";
+import type { Change, ColorChange, ColorValue, EditChange, MoveChange, NoteChange, RemoveChange } from "./changes";
+import { parseColor } from "./color";
+import { detectClass, nearest, newClassName, paletteFor, parseToken, sameColor, type ClassMatch, type ColorProperty, type Palette } from "./palette";
 import { contextHtml, sectionOf, segmentsOf, snippet, sourceHints, stableSelector, textOf } from "./describe";
 import * as engine from "./engine";
 import { buildPrompt } from "./prompt";
@@ -43,6 +45,34 @@ function base(el: Element, elementId: string) {
     segments: segmentsOf(el),
     sourceHints: sourceHints(el),
   };
+}
+
+/** The color an element paints for `property` right now. Unreadable values count as transparent. */
+export function computedColor(el: Element, property: ColorProperty): { hex: string; alpha: number } {
+  const cs = getComputedStyle(el);
+  // The border-color shorthand can read as four values; the top edge stands for all of them.
+  const raw = property === "border-color" ? cs.borderTopColor : cs.getPropertyValue(property);
+  return parseColor(raw ?? "") ?? { hex: "#000000", alpha: 0 };
+}
+
+/** Turns "zinc-800", "zinc-800/50", "accent" or a hex into the new color value, or null if unreadable. */
+function resolvePick(color: string, property: ColorProperty, palette: Palette, keep: ClassMatch | null): ColorChange["newValue"] | null {
+  const token = parseToken(color);
+  const swatch = token && palette.byToken.get(token.token);
+  if (token && swatch?.defined) {
+    const opacity = token.opacity ?? keep?.opacity ?? null;
+    return {
+      hex: swatch.hex,
+      alpha: swatch.alpha * (opacity === null ? 1 : opacity / 100),
+      className: newClassName(property, token.token, keep, token.opacity ?? undefined),
+    };
+  }
+  const parsed = parseColor(color);
+  if (!parsed) return null;
+  const exact = [...palette.byToken.values()].find((s) => s.defined && sameColor(s, parsed));
+  if (exact) return { ...parsed, className: newClassName(property, exact.token, keep, null) };
+  const close = nearest(parsed.hex, palette);
+  return { ...parsed, className: null, closest: { className: newClassName(property, close.token, keep, null), hex: close.hex } };
 }
 
 /** The public shape of a change for callers (list_changes). */
@@ -135,6 +165,26 @@ const handlers: Record<CommandName, Handler> = {
     const patch = session.patchFor(before, after);
     session.commit("Move", [patch]);
     return { changed: true, changeId: patch.id };
+  },
+
+  set_color({ elementId, property, color }: { elementId: string; property: ColorProperty; color: string }) {
+    const el = requireElement(elementId);
+    const palette = paletteFor(el);
+    const before = session.findColorChange(elementId, property);
+    const original = before?.oldValue ?? computedColor(el, property);
+    const detected = detectClass(el.classList, property, original, palette);
+    const oldValue: ColorValue = before?.oldValue ?? { hex: original.hex, alpha: original.alpha, className: detected.match?.className ?? null };
+    const newValue = resolvePick(color, property, palette, detected.match);
+    if (!newValue) throw new CommandError("Color must be a hex like #2b2723 or a palette token like zinc-800");
+    const result = { className: newValue.className, hex: newValue.hex };
+    if (before ? sameColor(before.newValue, newValue) : sameColor(oldValue, newValue)) return { changed: false, changeId: before?.id, ...result };
+    // Picking the original color again removes the change.
+    const after: ColorChange | null = sameColor(oldValue, newValue)
+      ? null
+      : { ...(before ?? base(el, elementId)), type: "color", property, oldValue, newValue, alsoOnElement: before?.alsoOnElement ?? detected.others };
+    const patch = session.patchFor(before, after);
+    session.commit("Color", [patch]);
+    return { changed: true, changeId: patch.id, ...result };
   },
 
   revert_change({ changeId }: { changeId: string }) {
