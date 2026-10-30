@@ -53,6 +53,7 @@ export function deltaE(hexA: string, hexB: string): number {
 /** A number token that may be a percentage ("62.3%" → 0.623 when `percentOf` is 100). */
 function num(token: string | undefined, percentOf = 100): number | null {
   if (token === undefined) return null;
+  if (token.trim() === "none") return 0; // CSS "missing component", e.g. the hue of a gray
   const v = parseFloat(token);
   if (Number.isNaN(v)) return null;
   return token.trim().endsWith("%") ? v / percentOf : v;
@@ -87,8 +88,8 @@ export function parseColor(css: string): ParsedColor | null {
   if (alpha === null) return null;
 
   if (fn[1] === "oklch") {
-    const [l, c, h] = [num(ch.parts[0], 100), num(ch.parts[1], 100 / 0.4), parseFloat(ch.parts[2]!)];
-    if (l === null || c === null || Number.isNaN(h)) return null;
+    const [l, c, h] = [num(ch.parts[0], 100), num(ch.parts[1], 100 / 0.4), num(ch.parts[2])];
+    if (l === null || c === null || h === null) return null;
     return { hex: oklchToHex(l, c, h), alpha: round2(clamp01(alpha)) };
   }
 

@@ -16,6 +16,10 @@ describe('parseColor', () => {
     expect(parseColor('oklch(21% 0.006 285.885)')!.hex).toBe('#18181b'); // zinc-900
   });
 
+  it('treats a none channel as zero, as Tailwind neutral grays use it', () => {
+    expect(parseColor('oklch(98.5% 0 none)')!.hex).toBe('#fafafa'); // neutral-50
+  });
+
   it('returns null for formats it does not read', () => {
     expect(parseColor('hsl(0 0% 0%)')).toBeNull();
     expect(parseColor('not-a-color')).toBeNull();
