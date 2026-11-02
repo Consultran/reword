@@ -134,7 +134,8 @@ export function createColorPicker(): ColorPicker {
     buildGrid();
     render();
     el.classList.add("show");
-    (grid.querySelector("button[tabindex='0']") as HTMLElement | null)?.focus({ preventScroll: true });
+    // Focus the hex field: focusing a swatch would preview it before the user chose anything.
+    hexInput.focus({ preventScroll: true });
   }
 
   function end() {
@@ -153,6 +154,9 @@ export function createColorPicker(): ColorPicker {
     if (!open) return;
     const id = open.id;
     const chosen = slots[active];
+    // End the preview now, not via the store listener: set_color reads the
+    // element's current color as the "old" value, so the preview must be gone.
+    end();
     close();
     for (const prop of PROPERTIES) {
       const p = chosen[prop];
@@ -187,11 +191,6 @@ export function createColorPicker(): ColorPicker {
     );
     if (!label && s.defined) b.style.setProperty("--swatch", colorCss(s));
     b.addEventListener("mouseenter", () => {
-      if (!s.defined) return;
-      hover = pickFromSwatch(s);
-      render();
-    });
-    b.addEventListener("focus", () => {
       if (!s.defined) return;
       hover = pickFromSwatch(s);
       render();
@@ -261,6 +260,12 @@ export function createColorPicker(): ColorPicker {
         next.tabIndex = 0;
         next.focus();
         next.scrollIntoView({ block: "nearest" });
+        // Arrowing through the grid previews like hovering does.
+        const s = open?.palette.byToken.get(next.dataset.token!);
+        if (s) {
+          hover = pickFromSwatch(s);
+          render();
+        }
         return;
       }
       if (move[0] === 0 && (col === 0 || col === rows[row]!.length - 1)) return;
