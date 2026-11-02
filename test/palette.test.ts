@@ -27,9 +27,10 @@ describe('buildPalette', () => {
     expect(p.byToken.get('accent')!.hex).toBe('#cfc3a0');
   });
 
-  it('skips black, white and values it cannot read', () => {
-    const q = buildPalette(['--color-black', '--color-white', '--color-brand'], (n) => (n === '--color-brand' ? 'var(--x)' : '#000'));
+  it('keeps black and white as stock colors and skips values it cannot read', () => {
+    const q = buildPalette(['--color-black', '--color-white', '--color-brand'], (n) => (n === '--color-brand' ? 'var(--x)' : ''));
     expect(q.siteSingles).toEqual([]);
+    expect(q.stockSingles.map((s) => [s.token, s.hex])).toEqual([['black', '#000000'], ['white', '#ffffff']]);
   });
 });
 
@@ -45,6 +46,11 @@ describe('detectClass', () => {
     const r = detectClass(['bg-zinc-900/50'], 'background-color', { hex: '#1f1c19', alpha: 0.5 }, p);
     expect(r.match).toMatchObject({ token: 'zinc-900', opacity: 50 });
     expect(newClassName('background-color', 'zinc-800', r.match)).toBe('bg-zinc-800/50');
+  });
+
+  it('detects bg-white and a /10 opacity on it', () => {
+    expect(detectClass(['bg-white'], 'background-color', { hex: '#ffffff', alpha: 1 }, p).match).toMatchObject({ className: 'bg-white' });
+    expect(detectClass(['bg-white/10'], 'background-color', { hex: '#ffffff', alpha: 0.1 }, p).match).toMatchObject({ token: 'white', opacity: 10 });
   });
 
   it('returns no match when no class renders the computed color', () => {

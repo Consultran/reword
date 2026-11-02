@@ -50,6 +50,9 @@ function base(el: Element, elementId: string) {
 /** The color an element paints for `property` right now. Unreadable values count as transparent. */
 export function computedColor(el: Element, property: ColorProperty): { hex: string; alpha: number } {
   const cs = getComputedStyle(el);
+  // A zero-width border still reports a color (currentColor under Tailwind's preflight): it isn't visible.
+  if (property === "border-color" && ["top", "right", "bottom", "left"].every((side) => parseFloat(cs.getPropertyValue(`border-${side}-width`)) === 0))
+    return { hex: "#000000", alpha: 0 };
   // The border-color shorthand can read as four values; the top edge stands for all of them.
   const raw = property === "border-color" ? cs.borderTopColor : cs.getPropertyValue(property);
   return parseColor(raw ?? "") ?? { hex: "#000000", alpha: 0 };

@@ -20,8 +20,17 @@ describe('parseColor', () => {
     expect(parseColor('oklch(98.5% 0 none)')!.hex).toBe('#fafafa'); // neutral-50
   });
 
+  it('reads the formats Chrome computes for Tailwind opacity classes', () => {
+    // bg-zinc-900/50 → color-mix(in oklab, …) computes to oklab(); the fallback to color(srgb …).
+    const mixed = parseColor('oklab(0.21 0.0016 -0.0058 / 0.5)')!;
+    expect(mixed.alpha).toBe(0.5);
+    expect(mixed.hex).toBe('#18181b');
+    expect(parseColor('color(srgb 0.0941 0.0941 0.1059 / 0.5)')).toEqual({ hex: '#18181b', alpha: 0.5 });
+    expect(parseColor('hsl(0 0% 100%)')).toEqual({ hex: '#ffffff', alpha: 1 });
+  });
+
   it('returns null for formats it does not read', () => {
-    expect(parseColor('hsl(0 0% 0%)')).toBeNull();
+    expect(parseColor('lab(50% 0 0)')).toBeNull();
     expect(parseColor('not-a-color')).toBeNull();
   });
 });

@@ -170,6 +170,15 @@ async function scenario(page, open, getPrompt) {
   assert((await page.locator('#side').getAttribute('style')) === null, 'undo restores the sidebar');
   await ov('.panel .tools button:has-text("Redo")').click();
   await page.waitForTimeout(150);
+  // Undo while the picker is open closes it and leaves no stray preview.
+  await ov('.bar .color').click();
+  await ov('.color-picker [data-token="blue-900"]').hover();
+  await ov('.panel .tools button:has-text("Undo")').click();
+  await page.waitForTimeout(150);
+  assert(!(await ov('.color-picker').isVisible()), 'undo closes an open picker');
+  assert((await page.locator('#side').getAttribute('style')) === null, 'undo with the picker open leaves no stray color');
+  await ov('.panel .tools button:has-text("Redo")').click();
+  await page.waitForTimeout(150);
   // Esc cancels a picker without changing anything.
   await ov('.bar .color').click();
   await ov('.color-picker [data-token="blue-900"]').hover();
@@ -177,6 +186,15 @@ async function scenario(page, open, getPrompt) {
   await page.waitForTimeout(100);
   assert(!(await ov('.color-picker').isVisible()), 'Esc closes the picker');
   assert((await page.locator('#side').evaluate((e) => getComputedStyle(e).backgroundColor)) === 'rgb(43, 39, 35)', 'Esc restores the applied color');
+  await page.keyboard.press('Escape');
+
+  // An opacity class (computed as oklab by Chrome) reads as the class, not as transparent.
+  await page.locator('#glass').click();
+  await ov('.bar .color').click();
+  await page.waitForTimeout(100);
+  const glassNow = await ov('.color-picker .now').textContent();
+  assert(glassNow.includes('bg-zinc-900/50'), 'Now reads an opacity class: ' + glassNow);
+  await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
 
   assert((await ov('.item').count()) === 9, `9 changes listed (${await ov('.item').count()})`);
@@ -261,7 +279,7 @@ function checkPrompt(prompt, label) {
   await ctx.close();
 
   // --- Bookmarklet flavour (no extension) ---
-  const b = await chromium.launch({ headless: true });
+  const b = await chromium.launch({ channel: 'chromium', headless: true }); // same build as the extension run; no separate headless-shell download
   const bctx = await b.newContext({ viewport: { width: 1280, height: 860 } });
   const bpage = await withFixture(bctx, { csp: STRICT_CSP });
   const code = fs.readFileSync(path.join(root, 'dist/reword.js'), 'utf8');

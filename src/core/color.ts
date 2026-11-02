@@ -18,8 +18,11 @@ const decode = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) 
 
 /** OKLCH (L 0–1, C, H in degrees) to #rrggbb, clipping out-of-gamut channels. */
 export function oklchToHex(l: number, c: number, h: number): string {
-  const a = c * Math.cos((h * Math.PI) / 180);
-  const b = c * Math.sin((h * Math.PI) / 180);
+  return oklabToHex(l, c * Math.cos((h * Math.PI) / 180), c * Math.sin((h * Math.PI) / 180));
+}
+
+/** OKLab to #rrggbb, clipping out-of-gamut channels. */
+export function oklabToHex(l: number, a: number, b: number): string {
   const l_ = l + 0.3963377774 * a + 0.2158037573 * b;
   const m_ = l - 0.1055613458 * a - 0.0638541728 * b;
   const s_ = l - 0.0894841775 * a - 1.291485548 * b;
@@ -80,20 +83,46 @@ export function parseColor(css: string): ParsedColor | null {
     return { hex: "#" + full.slice(0, 6), alpha };
   }
 
-  const fn = s.match(/^(rgba?|oklch)\((.*)\)$/);
+  // Chrome computes Tailwind's opacity classes (color-mix in oklab) to oklab() or color(srgb …).
+  const fn = s.match(/^(rgba?|oklch|oklab|hsla?|color)\((.*)\)$/);
   if (!fn) return null;
-  const ch = channels(fn[2]!);
-  if (!ch || ch.parts.length !== 3) return null;
-  const alpha = ch.alpha === undefined ? 1 : num(ch.alpha, 100);
-  if (alpha === null) return null;
-
-  if (fn[1] === "oklch") {
-    const [l, c, h] = [num(ch.parts[0], 100), num(ch.parts[1], 100 / 0.4), num(ch.parts[2])];
-    if (l === null || c === null || h === null) return null;
-    return { hex: oklchToHex(l, c, h), alpha: round2(clamp01(alpha)) };
+  let inner = fn[2]!.trim();
+  if (fn[1] === "color") {
+    if (!inner.startsWith("srgb ")) return null;
+    inner = inner.slice(5);
   }
+  const ch = channels(inner);
+  if (!ch || ch.parts.length !== 3) return null;
+  const a = ch.alpha === undefined ? 1 : num(ch.alpha, 100);
+  if (a === null) return null;
+  const alpha = round2(clamp01(a));
+  const [p0, p1, p2] = ch.parts;
 
-  const rgb = ch.parts.map((p) => num(p, 100 / 255));
-  if (rgb.some((v) => v === null)) return null;
-  return { hex: "#" + rgb.map((v) => toHex2(v! / 255)).join(""), alpha: round2(clamp01(alpha)) };
+  switch (fn[1]) {
+    case "oklch": {
+      const [l, c, h] = [num(p0, 100), num(p1, 100 / 0.4), num(p2)];
+      return l === null || c === null || h === null ? null : { hex: oklchToHex(l, c, h), alpha };
+    }
+    case "oklab": {
+      const [l, A, B] = [num(p0, 100), num(p1, 100 / 0.4), num(p2, 100 / 0.4)];
+      return l === null || A === null || B === null ? null : { hex: oklabToHex(l, A, B), alpha };
+    }
+    case "color": {
+      const rgb = [num(p0), num(p1), num(p2)];
+      return rgb.some((v) => v === null) ? null : { hex: "#" + rgb.map((v) => toHex2(v!)).join(""), alpha };
+    }
+    case "hsl":
+    case "hsla": {
+      const [h, sat, l] = [num(p0), num(p1), num(p2)];
+      if (h === null || sat === null || l === null) return null;
+      // CSS hsl(): s and l are percentages; num() already divided them by 100.
+      const k = (n: number) => (n + h / 30) % 12;
+      const f = (n: number) => l - sat * Math.min(l, 1 - l) * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+      return { hex: "#" + [f(0), f(8), f(4)].map(toHex2).join(""), alpha };
+    }
+    default: {
+      const rgb = ch.parts.map((p) => num(p, 100 / 255));
+      return rgb.some((v) => v === null) ? null : { hex: "#" + rgb.map((v) => toHex2(v! / 255)).join(""), alpha };
+    }
+  }
 }

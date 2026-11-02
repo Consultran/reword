@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Change, ColorChange, EditChange } from '../src/core/changes';
 import { executeCommand } from '../src/core/commands';
+import { previewColor } from '../src/core/engine';
 import { getToolDefinitions } from '../src/core/definitions';
 import { segmentsOf, sourceHints, stableSelector, textOf } from '../src/core/describe';
 import { buildPrompt } from '../src/core/prompt';
@@ -178,10 +179,32 @@ describe('set_color', () => {
     expect(store.get().changes.map((c) => (c as ColorChange).property)).toEqual(['background-color', 'color']);
   });
 
+  it('ends a live preview before applying or undoing, so no stale color comes back', async () => {
+    const id = await idFor('#side');
+    const el = document.getElementById('side')!;
+    const preview = previewColor(el, 'background-color');
+    preview.set('rgb(1 2 3 / 1)');
+    await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'zinc-800' });
+    preview.end(); // the picker closing afterwards must not undo the applied color
+    expect(el.style.getPropertyValue('background-color')).toContain('43');
+    const again = previewColor(el, 'background-color');
+    again.set('rgb(1 2 3 / 1)');
+    await executeCommand('undo');
+    again.end();
+    expect(el.getAttribute('style')).toBeNull();
+  });
+
+  it('records a borderless element as having no border', async () => {
+    document.body.innerHTML = '<div id="side" class="bg-zinc-900" style="border-width: 0; border-style: solid; border-top-color: rgb(200, 0, 0); border-top-width: 0px">x</div>';
+    const id = await idFor('#side');
+    await executeCommand('set_color', { elementId: id, property: 'border-color', color: 'zinc-800' });
+    expect((store.get().changes[0] as ColorChange).oldValue).toMatchObject({ alpha: 0, className: null });
+  });
+
   it('rejects colors it cannot read', async () => {
     const id = await idFor('#side');
     expect(await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'not-a-color' })).toMatchObject({ ok: false });
-    expect(await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'hsl(0 0% 0%)' })).toMatchObject({ ok: false });
+    expect(await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'lab(50% 0 0)' })).toMatchObject({ ok: false });
   });
 });
 

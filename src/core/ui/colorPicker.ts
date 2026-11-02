@@ -168,7 +168,10 @@ export function createColorPicker(): ColorPicker {
     if (s.colorEditingId !== prev.colorEditingId) {
       end();
       if (s.colorEditingId) start(s.colorEditingId);
-    } else if (open && s.selectedId !== open.id) {
+    } else if (open && (s.selectedId !== open.id || s.changes !== prev.changes)) {
+      // Undo, redo, revert or an API call changed the page under the preview:
+      // end now so the preview's saved "before" value can't be put back stale.
+      end();
       store.set({ colorEditingId: null });
     }
   });
@@ -208,7 +211,7 @@ export function createColorPicker(): ColorPicker {
   function buildGrid() {
     if (!open) return;
     rows = [];
-    const { siteFamilies, siteSingles, stockFamilies } = open.palette;
+    const { siteFamilies, siteSingles, stockFamilies, stockSingles } = open.palette;
     const head = h("div", { class: "fam steps", "aria-hidden": "true" }, h("span"), ...STEPS.map((s) => h("span", {}, s)));
     const site = [
       ...siteFamilies.map((f) => familyRow(f.name, f.swatches)),
@@ -223,11 +226,14 @@ export function createColorPicker(): ColorPicker {
         : []),
     ];
     const stockRows = stockFamilies.map((f) => familyRow(f.name, f.swatches));
+    const stockChips = stockSingles.map((s) => cell(s, s.token));
+    rows.push(stockChips);
     grid.replaceChildren(
       head,
       ...(site.length ? [h("div", { class: "section site" }, "This site"), ...site] : []),
       h("div", { class: "section" }, "Tailwind"),
       ...stockRows,
+      h("div", { class: "singles" }, ...stockChips),
     );
     const first = rows.flat().find((b) => !b.disabled);
     if (first) first.tabIndex = 0;

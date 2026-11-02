@@ -16,7 +16,8 @@
   .dark { --color-accent: #cfc3a0; }
   .bg-zinc-50 { background-color: var(--color-zinc-50, oklch(98.5% 0 0)); }
   .dark\:bg-zinc-900:where(.dark, .dark *) { background-color: var(--color-zinc-900); }
-  #side { padding: 12px 24px; }
+  .bg-zinc-900\/50 { background-color: color-mix(in oklab, var(--color-zinc-900) 50%, transparent); }
+  #side, #glass { padding: 12px 24px; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
 </style>
 </head>
@@ -31,6 +32,7 @@
     </form>
   </section>
   <aside id="side" class="dark bg-zinc-50 dark:bg-zinc-900">Sidebar</aside>
+  <div id="glass" class="bg-zinc-900/50">Glass</div>
   <section id="pricing" aria-label="Pricing">
     <h2>Simple pricing</h2>
     <ul><li>Unlimited seats</li><li>SOC 2 Type II</li></ul>

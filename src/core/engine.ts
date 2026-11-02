@@ -10,6 +10,8 @@ const originalContent = new WeakMap<Element, { children: Node[] } | { text: Text
 const originalDisplay = new WeakMap<Element, { value: string; priority: string }>();
 /** Where a moved element sat before the move was applied. */
 const originalPlace = new WeakMap<MoveChange, { parent: Element; next: Node | null }>();
+/** Picker previews that are live right now, so applying or undoing a color change can end them first. */
+const livePreviews = new WeakMap<Element, Map<ColorProperty, { end(): void }>>();
 /** Inline color values before a color change was applied, per property. */
 const originalColor = new WeakMap<Element, Map<ColorProperty, { value: string; priority: string }>>();
 
@@ -36,8 +38,8 @@ export function previewColor(el: Element, property: ColorProperty): { set(css: s
   const style = (el as HTMLElement).style;
   const start = style ? { value: style.getPropertyValue(property), priority: style.getPropertyPriority(property) } : undefined;
   let ended = false;
-  return {
-    set(css) {
+  const handle = {
+    set(css: string | null) {
       if (ended || !style) return;
       if (css === null) restoreInline(style, property, start);
       else style.setProperty(property, css, "important");
@@ -46,10 +48,21 @@ export function previewColor(el: Element, property: ColorProperty): { set(css: s
     end() {
       if (ended || !style) return;
       ended = true;
+      if (livePreviews.get(el)?.get(property) === handle) livePreviews.get(el)!.delete(property);
       restoreInline(style, property, start);
       dropEmptyStyle(el);
     },
   };
+  let live = livePreviews.get(el);
+  if (!live) livePreviews.set(el, (live = new Map()));
+  live.get(property)?.end();
+  live.set(property, handle);
+  return handle;
+}
+
+/** Ends a live preview on this element and property, putting back the inline value it started from. */
+function endPreview(el: Element, property: ColorProperty) {
+  livePreviews.get(el)?.get(property)?.end();
 }
 
 export function apply(change: Change) {
@@ -91,6 +104,7 @@ export function apply(change: Change) {
     case "color": {
       const style = (el as HTMLElement).style;
       if (!style) return;
+      endPreview(el, change.property);
       let saved = originalColor.get(el);
       if (!saved) originalColor.set(el, (saved = new Map()));
       if (!saved.has(change.property))
@@ -135,6 +149,7 @@ export function unapply(change: Change) {
     }
     case "color": {
       const style = (el as HTMLElement).style;
+      endPreview(el, change.property);
       const saved = originalColor.get(el);
       if (!style || !saved?.has(change.property)) return;
       restoreInline(style, change.property, saved.get(change.property));

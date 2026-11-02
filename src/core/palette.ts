@@ -30,6 +30,8 @@ export interface Palette {
   siteFamilies: Family[];
   siteSingles: Swatch[];
   stockFamilies: Family[];
+  /** Tailwind's black and white. */
+  stockSingles: Swatch[];
   /** Every swatch by token; site colors come first so ties favour them. */
   byToken: Map<string, Swatch>;
 }
@@ -48,6 +50,8 @@ export interface ClassMatch {
 /** Colors closer than this (OKLab) count as the same color. */
 const SAME = 0.002;
 const SKIP_SINGLES = new Set(["black", "white", "transparent", "current", "inherit"]);
+/** Stock colors outside the 50–950 families. black and white are skipped as site singles and live here. */
+const STOCK_SINGLES: [string, string][] = [["black", "#000000"], ["white", "#ffffff"]];
 
 let stockHex: Record<string, Record<Step, string>> | null = null;
 function stock(): Record<string, Record<Step, string>> {
@@ -63,7 +67,7 @@ function stock(): Record<string, Record<Step, string>> {
 
 /** Every stock custom-property name, so unused Tailwind colors still resolve. */
 export function stockVarNames(): string[] {
-  return Object.keys(STOCK_PALETTE).flatMap((f) => STEPS.map((s) => `--color-${f}-${s}`));
+  return [...Object.keys(STOCK_PALETTE).flatMap((f) => STEPS.map((s) => `--color-${f}-${s}`)), ...STOCK_SINGLES.map(([t]) => `--color-${t}`)];
 }
 
 /** Collects every `--color-*` name declared in these sheets, including inside @media and @layer. */
@@ -140,9 +144,15 @@ export function buildPalette(names: Iterable<string>, resolve: VarResolver): Pal
     }
   }
 
+  const stockSingles: Swatch[] = STOCK_SINGLES.map(([token, fallback]) => {
+    const v = parseColor(resolve(`--color-${token}`)) ?? { hex: fallback, alpha: 1 };
+    return { token, hex: v.hex, alpha: v.alpha, defined: true };
+  });
+
   const byToken = new Map<string, Swatch>();
-  for (const s of [...siteFamilies.flatMap((f) => f.swatches), ...singles, ...stockFamilies.flatMap((f) => f.swatches)]) byToken.set(s.token, s);
-  return { siteFamilies, siteSingles: singles, stockFamilies, byToken };
+  for (const s of [...siteFamilies.flatMap((f) => f.swatches), ...singles, ...stockFamilies.flatMap((f) => f.swatches), ...stockSingles])
+    byToken.set(s.token, s);
+  return { siteFamilies, siteSingles: singles, stockFamilies, stockSingles, byToken };
 }
 
 /** The palette as it resolves at `el`: every declared or stock `--color-*` name. */
