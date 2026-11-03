@@ -1,8 +1,9 @@
 // Change list, undo/redo history and persistence. commit() is the single path
 // by which the change list and the page DOM are modified.
-import { isStoredChange, serialize, type Change, type HistoryEntry, type PageRef, type Patch } from "./changes";
+import { isStoredChange, serialize, type Change, type ColorChange, type HistoryEntry, type PageRef, type Patch } from "./changes";
 import { HOST_TAG, setOriginalTextLookup, textOf } from "./describe";
 import * as engine from "./engine";
+import type { ColorProperty } from "./palette";
 import { elementOf, idOf } from "./registry";
 import { store } from "./store";
 import type { ChangeStore } from "./types";
@@ -36,6 +37,11 @@ export function changes(): Change[] {
 
 export function findChange(elementId: string, type: Change["type"]): Change | undefined {
   return changes().find((c) => c.elementId === elementId && c.type === type);
+}
+
+/** An element can have one color change per property (background, text, border). */
+export function findColorChange(elementId: string, property: ColorProperty): ColorChange | undefined {
+  return changes().find((c): c is ColorChange => c.elementId === elementId && c.type === "color" && c.property === property);
 }
 
 function applyToList(list: Change[], patch: Patch, dir: "forward" | "back"): Change[] {

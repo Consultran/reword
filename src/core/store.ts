@@ -22,6 +22,8 @@ export interface State {
   editingId: string | null;
   /** Element whose note editor is open, if any. */
   noteEditingId: string | null;
+  /** Element whose color picker is open, if any. */
+  colorEditingId: string | null;
   /** Bumped to trigger a flash animation on an element. */
   flash: { elementId: string; at: number } | null;
   panel: PanelState;
@@ -40,6 +42,7 @@ class Store {
     selectedId: null,
     editingId: null,
     noteEditingId: null,
+    colorEditingId: null,
     flash: null,
     panel: { collapsed: false, x: null, y: null, anchor: "bottom" },
     toast: null,

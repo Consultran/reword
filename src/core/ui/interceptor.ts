@@ -97,7 +97,7 @@ export function createInterceptor(overlay: Overlay) {
     e.stopImmediatePropagation();
     if (e.type === "pointerdown" && editing) save();
     if (e.type === "click" && me.button === 0) {
-      store.set({ noteEditingId: null });
+      store.set({ noteEditingId: null, colorEditingId: null });
       void executeCommand("select_element", { elementId: target ? idOf(target) : null });
     }
     // Double-click is a shortcut for "Edit text".
@@ -159,6 +159,7 @@ export function createInterceptor(overlay: Overlay) {
     if (e.key === "Escape") {
       if (overlay.isDragging()) overlay.cancelDrag();
       else if (store.get().noteEditingId) store.set({ noteEditingId: null });
+      else if (store.get().colorEditingId) store.set({ colorEditingId: null });
       else if (store.get().selectedId) void executeCommand("select_element", { elementId: null });
       else return;
       e.preventDefault();

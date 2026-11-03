@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { Change, EditChange } from '../src/core/changes';
+import type { Change, ColorChange, EditChange } from '../src/core/changes';
 import { executeCommand } from '../src/core/commands';
+import { previewColor } from '../src/core/engine';
 import { getToolDefinitions } from '../src/core/definitions';
 import { segmentsOf, sourceHints, stableSelector, textOf } from '../src/core/describe';
 import { describeDeployment } from '../src/core/deployment';
@@ -133,6 +134,81 @@ describe('commands', () => {
   });
 });
 
+describe('set_color', () => {
+  // happy-dom doesn't inherit custom properties from :root, so the vars sit on the element too.
+  const css = ':root,#side{--color-zinc-900:#1f1c19;--color-zinc-800:#2b2723} .bg-zinc-900{background-color:var(--color-zinc-900)}';
+  beforeEach(async () => {
+    await executeCommand('clear_all');
+    document.head.innerHTML = `<style>${css}</style>`;
+    document.body.innerHTML = '<div id="side" class="bg-zinc-900">x</div>';
+  });
+
+  const idFor = async (selector: string) => {
+    const r = await executeCommand('find_elements', { selector });
+    return (r.data as { elementId: string }[])[0]!.elementId;
+  };
+
+  it('sets a palette color live, records a class swap, and undoes', async () => {
+    const id = await idFor('#side');
+    const r = await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'zinc-800' });
+    expect(r).toMatchObject({ ok: true, data: { changed: true, className: 'bg-zinc-800', hex: '#2b2723' } });
+    const el = document.getElementById('side')!;
+    expect(el.style.getPropertyValue('background-color')).not.toBe('');
+    expect(el.style.getPropertyPriority('background-color')).toBe('important');
+    const c = store.get().changes[0] as ColorChange;
+    expect(c.oldValue).toMatchObject({ className: 'bg-zinc-900', hex: '#1f1c19' });
+    await executeCommand('undo');
+    expect(el.getAttribute('style')).toBeNull();
+  });
+
+  it('collapses repeat picks and drops a pick back to the original', async () => {
+    const id = await idFor('#side');
+    await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'zinc-800' });
+    await executeCommand('set_color', { elementId: id, property: 'background-color', color: '#123456' });
+    expect(store.get().changes).toHaveLength(1);
+    const c = store.get().changes[0] as ColorChange;
+    expect(c.newValue).toMatchObject({ hex: '#123456', className: null });
+    expect(c.newValue.closest).toBeDefined();
+    await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'zinc-900' });
+    expect(store.get().changes).toHaveLength(0);
+  });
+
+  it('keeps one change per property', async () => {
+    const id = await idFor('#side');
+    await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'zinc-800' });
+    await executeCommand('set_color', { elementId: id, property: 'color', color: '#ffffff' });
+    expect(store.get().changes.map((c) => (c as ColorChange).property)).toEqual(['background-color', 'color']);
+  });
+
+  it('ends a live preview before applying or undoing, so no stale color comes back', async () => {
+    const id = await idFor('#side');
+    const el = document.getElementById('side')!;
+    const preview = previewColor(el, 'background-color');
+    preview.set('rgb(1 2 3 / 1)');
+    await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'zinc-800' });
+    preview.end(); // the picker closing afterwards must not undo the applied color
+    expect(el.style.getPropertyValue('background-color')).toContain('43');
+    const again = previewColor(el, 'background-color');
+    again.set('rgb(1 2 3 / 1)');
+    await executeCommand('undo');
+    again.end();
+    expect(el.getAttribute('style')).toBeNull();
+  });
+
+  it('records a borderless element as having no border', async () => {
+    document.body.innerHTML = '<div id="side" class="bg-zinc-900" style="border-width: 0; border-style: solid; border-top-color: rgb(200, 0, 0); border-top-width: 0px">x</div>';
+    const id = await idFor('#side');
+    await executeCommand('set_color', { elementId: id, property: 'border-color', color: 'zinc-800' });
+    expect((store.get().changes[0] as ColorChange).oldValue).toMatchObject({ alpha: 0, className: null });
+  });
+
+  it('rejects colors it cannot read', async () => {
+    const id = await idFor('#side');
+    expect(await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'not-a-color' })).toMatchObject({ ok: false });
+    expect(await executeCommand('set_color', { elementId: id, property: 'background-color', color: 'lab(50% 0 0)' })).toMatchObject({ ok: false });
+  });
+});
+
 describe('buildPrompt', () => {
   const page = { key: 'https://example.com/', url: 'https://example.com/', title: 'Example' };
   const base = {
@@ -163,6 +239,36 @@ describe('buildPrompt', () => {
     expect(json).toHaveLength(4);
     expect(json[0]).not.toHaveProperty('elementId');
     expect(json[1]).toMatchObject({ number: 2, note: 'Shorter' });
+  });
+
+  it('renders color changes as a class swap', () => {
+    const color = (o: Partial<ColorChange>): ColorChange => ({
+      ...base, id: 'ch_9', type: 'color', property: 'background-color',
+      oldValue: { hex: '#1f1c19', alpha: 1, className: 'dark:bg-zinc-900' },
+      newValue: { hex: '#2b2723', alpha: 1, className: 'dark:bg-zinc-800' },
+      alsoOnElement: ['bg-zinc-50'], ...o,
+    });
+    const p1 = buildPrompt([color({})]);
+    expect(p1).toContain('CHANGE COLOR');
+    expect(p1).toContain('Property: background-color');
+    expect(p1).toContain('Old: dark:bg-zinc-900 (#1f1c19)');
+    expect(p1).toContain('New: dark:bg-zinc-800 (#2b2723)');
+    expect(p1).toContain('Swap the class `dark:bg-zinc-900` for `dark:bg-zinc-800`.');
+    expect(p1).toContain('Also on the element: bg-zinc-50');
+    expect(p1).toContain('CHANGE COLOR: swap the named Tailwind class');
+
+    const p2 = buildPrompt([color({
+      oldValue: { hex: '#000000', alpha: 0, className: null },
+      newValue: { hex: '#2a3b4c', alpha: 1, className: null, closest: { className: 'bg-slate-800', hex: '#1e293b' } },
+      alsoOnElement: [],
+    })]);
+    expect(p2).toContain('Old: transparent (no background set)');
+    expect(p2).toContain('New: #2a3b4c (no matching Tailwind class; closest is bg-slate-800 #1e293b)');
+    expect(p2).not.toContain('Swap the class');
+    expect(p2).not.toContain('Also on the element');
+
+    const p3 = buildPrompt([color({ property: 'color', oldValue: { hex: '#b9b3a3', alpha: 1, className: null }, alsoOnElement: [] })]);
+    expect(p3).toContain('Old: #b9b3a3 (no Tailwind class on this element; the color comes from a component, a parent or CSS)');
   });
 
   it('groups by page and keeps numbering across pages', () => {

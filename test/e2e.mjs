@@ -142,7 +142,62 @@ async function scenario(page, open, getPrompt) {
   await page.waitForTimeout(100);
   assert(!(await page.locator('h2').isVisible()), 'h2 hidden by remove');
 
-  assert((await ov('.item').count()) === 8, `8 changes listed (${await ov('.item').count()})`);
+  // Color: Now follows the rendering dark: class, hover previews, A/B flips, Apply keeps the one showing.
+  await page.locator('#side').click();
+  await ov('.bar .color').click();
+  await page.waitForTimeout(100);
+  assert(await ov('.color-picker').isVisible(), 'color picker opens');
+  const openBg = await page.locator('#side').evaluate((e) => getComputedStyle(e).backgroundColor);
+  assert(openBg === 'rgb(31, 28, 25)', 'opening the picker leaves the page alone: ' + openBg);
+  assert((await ov('.color-picker .now').textContent()).includes('dark:bg-zinc-900'), 'Now shows the rendering variant class');
+  await ov('.color-picker [data-token="zinc-800"]').hover();
+  const hoverBg = await page.locator('#side').evaluate((e) => getComputedStyle(e).backgroundColor);
+  assert(hoverBg === 'rgb(43, 39, 35)', 'hover previews zinc-800: ' + hoverBg);
+  await ov('.color-picker [data-token="zinc-800"]').click();
+  await ov('.color-picker .slot-b').click();
+  await ov('.color-picker [data-token="blue-900"]').click();
+  const bBg = await page.locator('#side').evaluate((e) => getComputedStyle(e).backgroundColor);
+  assert(bBg !== 'rgb(43, 39, 35)' && bBg !== 'rgb(31, 28, 25)', 'B shows on the page: ' + bBg);
+  await ov('.color-picker .slot-a').click();
+  assert((await page.locator('#side').evaluate((e) => getComputedStyle(e).backgroundColor)) === 'rgb(43, 39, 35)', 'flip back to A');
+  assert((await ov('.color-picker .apply').textContent()) === 'Apply A', 'apply names the slot showing');
+  await ov('.color-picker .apply').click();
+  await page.waitForTimeout(150);
+  assert(!(await ov('.color-picker').isVisible()), 'picker closes on apply');
+  assert((await page.locator('#side').evaluate((e) => getComputedStyle(e).backgroundColor)) === 'rgb(43, 39, 35)', 'applied color stays');
+  await ov('.panel .tools button:has-text("Undo")').click();
+  await page.waitForTimeout(150);
+  assert((await page.locator('#side').getAttribute('style')) === null, 'undo restores the sidebar');
+  await ov('.panel .tools button:has-text("Redo")').click();
+  await page.waitForTimeout(150);
+  // Undo while the picker is open closes it and leaves no stray preview.
+  await ov('.bar .color').click();
+  await ov('.color-picker [data-token="blue-900"]').hover();
+  await ov('.panel .tools button:has-text("Undo")').click();
+  await page.waitForTimeout(150);
+  assert(!(await ov('.color-picker').isVisible()), 'undo closes an open picker');
+  assert((await page.locator('#side').getAttribute('style')) === null, 'undo with the picker open leaves no stray color');
+  await ov('.panel .tools button:has-text("Redo")').click();
+  await page.waitForTimeout(150);
+  // Esc cancels a picker without changing anything.
+  await ov('.bar .color').click();
+  await ov('.color-picker [data-token="blue-900"]').hover();
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
+  assert(!(await ov('.color-picker').isVisible()), 'Esc closes the picker');
+  assert((await page.locator('#side').evaluate((e) => getComputedStyle(e).backgroundColor)) === 'rgb(43, 39, 35)', 'Esc restores the applied color');
+  await page.keyboard.press('Escape');
+
+  // An opacity class (computed as oklab by Chrome) reads as the class, not as transparent.
+  await page.locator('#glass').click();
+  await ov('.bar .color').click();
+  await page.waitForTimeout(100);
+  const glassNow = await ov('.color-picker .now').textContent();
+  assert(glassNow.includes('bg-zinc-900/50'), 'Now reads an opacity class: ' + glassNow);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+
+  assert((await ov('.item').count()) === 9, `9 changes listed (${await ov('.item').count()})`);
   return getPrompt();
 }
 
@@ -153,6 +208,8 @@ function checkPrompt(prompt, label) {
   assert((prompt.match(/\d\. EDIT TEXT/g) ?? []).length === 4, `${label}: 4 text edits`);
   assert(prompt.includes('NOTE') && prompt.includes('Instruction: "Say \\"unlimited team members\\" instead?"'), `${label}: note`);
   assert((prompt.match(/\d\. MOVE/g) ?? []).length === 2 && prompt.includes('REMOVE'), `${label}: moves and remove`);
+  assert(prompt.includes('Swap the class `dark:bg-zinc-900` for `dark:bg-zinc-800`.'), `${label}: color class swap keeps the dark: variant`);
+  assert(prompt.includes('Also on the element: bg-zinc-50'), `${label}: color lists the other variant`);
   assert(prompt.includes('```json'), `${label}: JSON block`);
 }
 
@@ -186,7 +243,7 @@ function checkPrompt(prompt, label) {
   // SPA navigation: items on another route are marked; coming back re-finds re-rendered nodes.
   await page.evaluate(() => history.pushState({}, '', '/pricing'));
   await page.waitForTimeout(800);
-  assert((await page.locator('reword-overlay .item.elsewhere').count()) === 8, 'items marked as another page');
+  assert((await page.locator('reword-overlay .item.elsewhere').count()) === 9, 'items marked as another page');
   await page.evaluate(() => {
     history.pushState({}, '', '/');
     document.querySelector('h1').outerHTML = '<h1>Ship <span class="grad">faster</span> with Acme</h1>'; // framework re-render
@@ -209,7 +266,8 @@ function checkPrompt(prompt, label) {
   await page.reload();
   await page.waitForTimeout(1200);
   assert(await page.locator('reword-overlay .panel').isVisible(), 'editor reopened after reload');
-  assert((await page.locator('reword-overlay .item').count()) === 8, 'queue intact after reload');
+  assert((await page.locator('reword-overlay .item').count()) === 9, 'queue intact after reload');
+  assert((await page.locator('#side').evaluate((e) => getComputedStyle(e).backgroundColor)) === 'rgb(43, 39, 35)', 'color re-applied after reload');
   assert((await text(page, 'h1')) === 'Ship it with Acme', 'edits re-applied after reload');
   await page.screenshot({ path: out('fixture-reload.png') });
 
@@ -221,7 +279,7 @@ function checkPrompt(prompt, label) {
   await ctx.close();
 
   // --- Bookmarklet flavour (no extension) ---
-  const b = await chromium.launch({ headless: true });
+  const b = await chromium.launch({ channel: 'chromium', headless: true }); // same build as the extension run; no separate headless-shell download
   const bctx = await b.newContext({ viewport: { width: 1280, height: 860 } });
   const bpage = await withFixture(bctx, { csp: STRICT_CSP });
   const code = fs.readFileSync(path.join(root, 'dist/reword.js'), 'utf8');
@@ -238,6 +296,6 @@ function checkPrompt(prompt, label) {
   assert(!(await bpage.locator('reword-overlay').count()), 'bookmarklet toggles closed');
   await bpage.evaluate(code); // and reopens with the queue
   await bpage.waitForTimeout(200);
-  assert((await bpage.locator('reword-overlay .item').count()) === 8, 'bookmarklet reopens with the queue');
+  assert((await bpage.locator('reword-overlay .item').count()) === 9, 'bookmarklet reopens with the queue');
   await b.close();
 }

@@ -14,6 +14,7 @@ const RULES = `Rules for the coding agent:
 - EDIT TEXT: change only the copy. Keep interpolation, markup, JSX structure and translations intact. If the copy is split across elements, update the source so the rendered text matches.
 - REMOVE and MOVE: change the markup in the component or template (delete or reorder the element), rather than hiding or repositioning it with CSS.
 - NOTE: an instruction about that element; apply it.
+- CHANGE COLOR: swap the named Tailwind class. Use the class, not the hex, because the site may redefine palette colors. If Old has no class, set the color where it's defined (component prop, parent class or stylesheet).
 - Don't make changes that weren't asked for. When you're done, list every file you changed.`;
 
 function elementLines(c: Change): string[] {
@@ -50,8 +51,32 @@ function describe(c: Change): string[] {
           : `Move ${code(c.selector)}${a} out of ${code(from)} to be ${c.position} ${code(c.targetSelector)}${b} in ${code(c.parentSelector)}.`;
       return ["MOVE", line, `Section: ${c.section}`, ...(c.sourceHints.length ? [`Source hints: ${c.sourceHints.join(", ")}`] : []), `Context HTML: ${code(c.contextHtml)}`];
     }
+    case "color": {
+      const { oldValue: o, newValue: n } = c;
+      const oldLine =
+        o.alpha === 0
+          ? `Old: transparent (${NOTHING_SET[c.property]})`
+          : o.className
+            ? `Old: ${o.className} (${o.hex})`
+            : `Old: ${o.hex} (no Tailwind class on this element; the color comes from a component, a parent or CSS)`;
+      const newLine = n.className
+        ? `New: ${n.className} (${n.hex})`
+        : `New: ${n.hex} (no matching Tailwind class${n.closest ? `; closest is ${n.closest.className} ${n.closest.hex}` : ""})`;
+      return [
+        "CHANGE COLOR",
+        ...elementLines(c),
+        `Property: ${c.property}`,
+        oldLine,
+        newLine,
+        ...(o.className && n.className ? [`Swap the class ${code(o.className)} for ${code(n.className)}.`] : []),
+        ...(c.alsoOnElement.length ? [`Also on the element: ${c.alsoOnElement.join(", ")}`] : []),
+        `Context HTML: ${code(c.contextHtml)}`,
+      ];
+    }
   }
 }
+
+const NOTHING_SET = { "background-color": "no background set", color: "no text color set", "border-color": "no border" } as const;
 
 function numbered(c: Change, n: number): string[] {
   const [title, ...rest] = describe(c);

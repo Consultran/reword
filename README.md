@@ -36,6 +36,7 @@ Open Reword. While it's open, clicks on the page select elements instead of foll
   - **Edit text** (or double-click the element): edit the copy in place. **Enter** saves, **Esc** cancels, **Shift+Enter** adds a line break.
   - **Remove**: hides the element. It stays in the DOM, so you can restore it.
   - **Note**: attach an instruction such as "make this bigger". A numbered pin marks the element. **⌘/Ctrl+Enter** saves. Click the pin to edit the note.
+  - **Color**: change the background, text or border color. Swatches show the site's own palette first (read from its Tailwind theme variables, as they resolve on that element, so a `.dark` section gets its dark values), then stock Tailwind 50–950. You can also type a hex; if no class matches, the closest one is offered. Hovering previews on the page. Click **B** to pick a second color and click A or B to flip between them. **Apply** keeps the one showing. The prompt asks for a class swap (`bg-zinc-900` → `bg-zinc-800`) and keeps variants such as `dark:` and opacity such as `/50`.
   - **Drag handle (⠿)**: drag the element anywhere on the page. Near its own siblings it snaps to reorder them. Anywhere else it drops before or after the element under the pointer, moving it into that container, which is outlined while you drag. If the selection has no siblings (the text inside a nav link), the handle moves its nearest ancestor that does (the `<li>`). With the handle focused, the arrow keys reorder one sibling at a time.
 - **Hold Alt to browse.** Clicks and hovers go to the page again, so you can open menus, follow links and scroll. Release Alt to go back to marking up. Alt+click on a link is turned into a normal click, so Chrome doesn't download it.
 - **Esc** clears the selection.
@@ -75,6 +76,16 @@ Page: https://acme.test/  |  Title: Acme  |  Viewport: 1280x860
    Move `#pricing li:nth-of-type(2)` ("SOC 2 Type II") to be before `#pricing li:nth-of-type(1)` ("Unlimited seats") within `ul`.
    Section: Pricing — "Simple pricing"
    Context HTML: `<li>SOC 2 Type II</li>`
+
+3. CHANGE COLOR
+   Element: <aside> — selector: `#sidebar`
+   Section: Sidebar
+   Property: background-color
+   Old: dark:bg-zinc-900 (#1f1c19)
+   New: dark:bg-zinc-800 (#2b2723)
+   Swap the class `dark:bg-zinc-900` for `dark:bg-zinc-800`.
+   Also on the element: bg-zinc-50
+   Context HTML: `<aside id="sidebar" class="bg-zinc-50 dark:bg-zinc-900">…</aside>`
 
 Rules for the coding agent:
 - Locate each element by searching the codebase for its old text first, …

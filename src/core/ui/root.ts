@@ -101,6 +101,7 @@ const ICON_SPECS = {
   edit: { stroke: 1.6, cap: true, shapes: [p("M3 4h10M8 4v9M5.5 13h5")] },
   remove: { stroke: 1.6, cap: true, shapes: [p("M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 8.5h6.6l.7-8.5")] },
   note: { stroke: 1.6, shapes: [p("M3 2.5h10v8l-3 3H3z"), p("M10 13.5v-3h3")] },
+  color: { stroke: 1.6, shapes: [p("M8 2.2c2.6 3.1 4.2 5.4 4.2 7.4a4.2 4.2 0 0 1-8.4 0c0-2 1.6-4.3 4.2-7.4z")] },
   parent: { stroke: 1.6, cap: true, shapes: [p("M8 13V3.5M4 7.5l4-4 4 4")] },
   undo: { stroke: 1.6, cap: true, shapes: [p("M5.5 3 2.5 6l3 3"), p("M2.5 6H10a3.5 3.5 0 0 1 0 7H7")] },
   redo: { stroke: 1.6, cap: true, shapes: [p("M10.5 3l3 3-3 3"), p("M13.5 6H6a3.5 3.5 0 0 0 0 7h3")] },
