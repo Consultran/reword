@@ -1,6 +1,9 @@
 import type { Change } from "./changes";
 
-/** Where a flavour keeps the change list (extension: storage.local per origin; others: sessionStorage). */
+/**
+ * Where a flavour keeps the change list (extension: storage.local per origin; others: sessionStorage).
+ * Both methods must reject on failure: a failed save that looks successful makes unsaved edits look deleted.
+ */
 export interface ChangeStore {
   load(): Promise<unknown[]>;
   save(changes: Record<string, unknown>[]): Promise<void>;

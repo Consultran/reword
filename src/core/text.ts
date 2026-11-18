@@ -26,6 +26,8 @@ export interface ExtractedText {
   text: string;
   /** Each non-empty text node, trimmed. More than one means the copy is split across elements. */
   segments: string[];
+  /** The text nodes that make up `text`, in order. Hidden content isn't included. */
+  textNodes: Text[];
 }
 
 function isVisuallyHidden(el: Element, style: CSSStyleDeclaration): boolean {
@@ -45,10 +47,12 @@ function isVisuallyHidden(el: Element, style: CSSStyleDeclaration): boolean {
  */
 export function extractText(root: Element): ExtractedText {
   const segments: string[] = [];
+  const textNodes: Text[] = [];
   let out = '';
 
   const walk = (node: Node, preserveNewlines: boolean) => {
     if (node.nodeType === Node.TEXT_NODE) {
+      textNodes.push(node as Text);
       const raw = node.nodeValue ?? '';
       const text = preserveNewlines ? raw : raw.replace(/\s+/g, ' ');
       out += text;
@@ -73,7 +77,7 @@ export function extractText(root: Element): ExtractedText {
   };
 
   walk(root, false);
-  return { text: normalize(out), segments };
+  return { text: normalize(out), segments, textNodes };
 }
 
 export function textMatches(el: Element, expected: string): boolean {

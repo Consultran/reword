@@ -1,6 +1,16 @@
 // Change list, undo/redo history and persistence. commit() is the single path
 // by which the change list and the page DOM are modified.
-import { isStoredChange, serialize, type Change, type ColorChange, type HistoryEntry, type PageRef, type Patch } from "./changes";
+import {
+  changeFingerprint,
+  isStoredChange,
+  mergeChanges,
+  serialize,
+  type Change,
+  type ColorChange,
+  type HistoryEntry,
+  type PageRef,
+  type Patch,
+} from "./changes";
 import { HOST_TAG, setOriginalTextLookup, textOf } from "./describe";
 import * as engine from "./engine";
 import type { ColorProperty } from "./palette";
@@ -11,8 +21,13 @@ import type { ChangeStore } from "./types";
 const undoStack: HistoryEntry[] = [];
 const redoStack: HistoryEntry[] = [];
 let nextChangeId = 1;
+/** Keeps ids from two tabs, or a page restored by Back, from colliding. */
+const thisCopyTag = Math.random().toString(36).slice(2, 7);
 let backend: ChangeStore | null = null;
 let loaded: Promise<void> | null = null;
+let lastSeenSaved = new Map<string, string>();
+let saveQueue: Promise<void> = Promise.resolve();
+let reapplyChanges: (() => void) | null = null;
 
 export const currentPageKey = () => `${location.origin}${location.pathname}${location.search}`;
 
@@ -23,7 +38,7 @@ export function currentPage(): PageRef {
 export const isOnCurrentPage = (c: Change) => c.page.key === currentPageKey();
 
 export function newChangeId(): string {
-  return `ch_${nextChangeId++}`;
+  return `ch_${nextChangeId++}_${thisCopyTag}`;
 }
 
 setOriginalTextLookup((el) => {
@@ -68,7 +83,7 @@ function update(list: Change[]) {
   store.set({ changes: list, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0 });
   const selected = elementOf(store.get().selectedId);
   if (selected && !(selected as HTMLElement).offsetParent && !selected.getClientRects().length) store.set({ selectedId: null });
-  void persist(list);
+  syncSavedChanges();
 }
 
 /** Applies patches, records them as one undoable step. */
@@ -117,12 +132,93 @@ export function patchFor(before: Change | undefined, after: Change | null): Patc
 
 // ---- Persistence -----------------------------------------------------------
 
-async function persist(list: Change[]) {
-  try {
-    await backend?.save(list.map(serialize));
-  } catch (err) {
-    console.warn("Reword: could not save changes", err);
+function fromStorage(stored: unknown): Change[] {
+  return (Array.isArray(stored) ? stored : []).filter(isStoredChange).map((c) => ({
+    ...c,
+    segments: c.segments ?? [],
+    sourceHints: c.sourceHints ?? [],
+    elementId: null,
+    ...(c.type === "move" ? { targetId: null } : {}),
+  })) as Change[];
+}
+
+const fingerprintsOf = (list: Change[]) => new Map(list.map((c) => [c.id, changeFingerprint(c)]));
+
+function isSameList(a: Change[], b: Change[]) {
+  return a.length === b.length && a.every((c, i) => changeFingerprint(c) === changeFingerprint(b[i]!));
+}
+
+/** Undo steps for a change another tab altered would put back an outdated version. Other changes in the step stay undoable. */
+function forgetHistoryOf(changeIds: Set<string>) {
+  for (const stack of [undoStack, redoStack]) {
+    const kept = stack
+      .map((entry) => ({ ...entry, patches: entry.patches.filter((p) => !changeIds.has(p.id)) }))
+      .filter((entry) => entry.patches.length);
+    stack.splice(0, stack.length, ...kept);
   }
+  store.set({ canUndo: undoStack.length > 0, canRedo: redoStack.length > 0 });
+}
+
+/** Brings this tab's list and page up to date. Edits made while saving are kept for the next save. */
+function showMergedChanges(sentToStorage: Change[], merged: Change[]) {
+  const current = changes();
+  const next = mergeChanges(fingerprintsOf(sentToStorage), current, merged);
+  if (next.length === current.length && next.every((c, i) => c === current[i])) return;
+
+  const stillListed = new Set(next);
+  const wasListed = new Set(current);
+  const dropped = current.filter((c) => !stillListed.has(c));
+  const arrived = next.filter((c) => !wasListed.has(c));
+  // Changes of one kind on an element build on each other, so survivors come off and go back on with it.
+  const survivors = new Set(
+    next.filter((c) => wasListed.has(c) && c.elementId && dropped.some((d) => d.elementId === c.elementId && d.type === c.type)),
+  );
+  for (const c of [...current].reverse()) if (!stillListed.has(c) || survivors.has(c)) engine.unapply(c);
+  for (const c of next) if (survivors.has(c)) engine.apply(c);
+  store.set({ changes: next });
+  forgetHistoryOf(new Set([...dropped, ...arrived].map((c) => c.id)));
+  reapplyChanges?.();
+}
+
+async function mergeWithStorage() {
+  if (!backend) return;
+  const saved = fromStorage(await backend.load());
+  const mine = changes();
+  const merged = mergeChanges(lastSeenSaved, mine, saved);
+  if (!isSameList(merged, saved)) await backend.save(merged.map(serialize));
+  lastSeenSaved = fingerprintsOf(merged);
+  showMergedChanges(mine, merged);
+}
+
+/**
+ * Lets one tab of this site read, merge and write at a time. A tab waits its turn
+ * for as long as it takes. Browsers offer this lock on https and localhost; where
+ * it's missing or refused the save still runs, unprotected.
+ */
+async function oneTabAtATime(work: () => Promise<void>) {
+  const locks = navigator.locks as LockManager | undefined;
+  if (!locks) return work();
+  let started = false;
+  try {
+    await locks.request("reword:changes", () => {
+      started = true;
+      return work();
+    });
+  } catch (err) {
+    if (started) throw err;
+    await work();
+  }
+}
+
+/**
+ * Saves by merging, one at a time, so a tab or restored page holding an older
+ * list can't overwrite newer edits. If storage fails, nothing is treated as
+ * saved and the edits stay in this tab for the next attempt.
+ */
+function syncSavedChanges() {
+  saveQueue = saveQueue
+    .then(() => oneTabAtATime(mergeWithStorage))
+    .catch((err) => console.warn("Reword: could not save changes", err));
 }
 
 /** Loads the stored session once. Nothing on the page changes until `watch()` runs. */
@@ -132,17 +228,8 @@ export function load(changeStore: ChangeStore): Promise<void> {
     .load()
     .catch(() => [])
     .then((stored) => {
-      const list = (Array.isArray(stored) ? stored : []).filter(isStoredChange).map((c) => ({
-        ...c,
-        segments: c.segments ?? [],
-        sourceHints: c.sourceHints ?? [],
-        elementId: null,
-        ...(c.type === "move" ? { targetId: null } : {}),
-      })) as Change[];
-      for (const c of list) {
-        const n = Number(c.id.replace(/^ch_/, ""));
-        if (n >= nextChangeId) nextChangeId = n + 1;
-      }
+      const list = fromStorage(stored);
+      lastSeenSaved = fingerprintsOf(list);
       store.set({ changes: list, pageKey: currentPageKey() });
     });
   return loaded;
@@ -239,19 +326,38 @@ export function watch(): () => void {
     }, 300);
   });
 
+  // Back/Forward can restore a frozen page, and another tab may have saved edits meanwhile.
+  // Not while typing: an update could replace the draft. Finishing the edit syncs anyway.
+  const syncUnlessEditing = () => {
+    if (!store.get().editingId) syncSavedChanges();
+  };
+  const onPageShow = (e: PageTransitionEvent) => {
+    if (e.persisted) syncUnlessEditing();
+  };
+  const onVisibilityChange = () => {
+    if (document.visibilityState === "visible") syncUnlessEditing();
+  };
+
   store.set({ pageKey: currentPageKey() });
   applyWithRetries();
+  reapplyChanges = applyWithRetries;
+  syncSavedChanges();
   const nav = (window as unknown as { navigation?: EventTarget }).navigation;
   const onNavigate = () => later(checkUrl, 0);
   addEventListener("popstate", checkUrl);
+  addEventListener("pageshow", onPageShow);
+  document.addEventListener("visibilitychange", onVisibilityChange);
   nav?.addEventListener("navigatesuccess", onNavigate);
   const interval = window.setInterval(checkUrl, 500);
   observer.observe(document.documentElement, { childList: true, subtree: true });
 
   return () => {
     stopped = true;
+    reapplyChanges = null;
     for (const t of timers) clearTimeout(t);
     removeEventListener("popstate", checkUrl);
+    removeEventListener("pageshow", onPageShow);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
     nav?.removeEventListener("navigatesuccess", onNavigate);
     clearInterval(interval);
     observer.disconnect();

@@ -5,22 +5,20 @@ const CHANGES_KEY = 'reword:changes';
 const OPEN_KEY = 'reword:open';
 
 /** Per-tab, per-origin storage. Survives reloads and page-to-page navigation in the same tab. */
-function sessionStore(): ChangeStore {
+export function sessionStore(): ChangeStore {
   return {
     async load() {
+      const saved = sessionStorage.getItem(CHANGES_KEY);
       try {
-        return JSON.parse(sessionStorage.getItem(CHANGES_KEY) ?? '[]');
+        return JSON.parse(saved ?? '[]');
       } catch {
-        return [];
+        return []; // Unreadable leftovers, not a storage failure.
       }
     },
+    // Blocked or full storage rejects, and the editor keeps the edits in memory.
     async save(changes) {
-      try {
-        if (changes.length) sessionStorage.setItem(CHANGES_KEY, JSON.stringify(changes));
-        else sessionStorage.removeItem(CHANGES_KEY);
-      } catch {
-        /* storage blocked — keep in memory only */
-      }
+      if (changes.length) sessionStorage.setItem(CHANGES_KEY, JSON.stringify(changes));
+      else sessionStorage.removeItem(CHANGES_KEY);
     },
   };
 }
