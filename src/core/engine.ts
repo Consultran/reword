@@ -3,9 +3,10 @@
 import type { Change, ColorValue, MoveChange } from "./changes";
 import type { ColorProperty } from "./palette";
 import { elementOf } from "./registry";
+import { editChangedWords } from "./wordEdit";
 
 /** What an edit replaced, restored when the edit is reverted. */
-const originalContent = new WeakMap<Element, { children: Node[] } | { text: Text; data: string }>();
+const originalContent = new WeakMap<Element, () => void>();
 /** Inline display value before an element was hidden. */
 const originalDisplay = new WeakMap<Element, { value: string; priority: string }>();
 /** Where a moved element sat before the move was applied. */
@@ -71,15 +72,25 @@ export function apply(change: Change) {
   switch (change.type) {
     case "edit": {
       if (originalContent.has(el)) unapply({ ...change, type: "edit" });
-      // A single text run next to icons (<button><svg/>Book a demo</button>) is edited in place.
+      const restoreWords = editChangedWords(el, change.oldText, change.newText);
+      if (restoreWords) {
+        originalContent.set(el, restoreWords);
+        break;
+      }
+      // The page no longer holds the old text, so the words can't be matched up.
       const runs = textRuns(el);
       if (runs.length === 1 && !change.newText.includes("\n")) {
+        // A single text run next to icons (<button><svg/>Book a demo</button>) is edited in place.
         const run = runs[0]!;
-        originalContent.set(el, { text: run, data: run.data });
-        const [, lead, , trail] = run.data.match(/^(\s*)([\s\S]*?)(\s*)$/)!;
+        const data = run.data;
+        originalContent.set(el, () => {
+          run.data = data;
+        });
+        const [, lead, , trail] = data.match(/^(\s*)([\s\S]*?)(\s*)$/)!;
         run.data = lead + change.newText + trail;
       } else {
-        originalContent.set(el, { children: Array.from(el.childNodes) });
+        const children = Array.from(el.childNodes);
+        originalContent.set(el, () => el.replaceChildren(...children));
         setPlainText(el, change.newText);
       }
       break;
@@ -120,10 +131,7 @@ export function unapply(change: Change) {
   if (!el) return;
   switch (change.type) {
     case "edit": {
-      const orig = originalContent.get(el);
-      if (!orig) break;
-      if ("children" in orig) el.replaceChildren(...orig.children);
-      else orig.text.data = orig.data;
+      originalContent.get(el)?.();
       originalContent.delete(el);
       break;
     }

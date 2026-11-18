@@ -11,7 +11,7 @@ const RULES = `Rules for the coding agent:
 - Locate each element by searching the codebase for its old text first, then the selector, class names and source hints.
 - If an exact text match fails, the copy may be split across elements or encoded differently: search for each listed search term, and try quote/entity variants (’ vs ' vs &apos; vs {"'"}, “ ” vs ", &amp; vs &, &nbsp;).
 - If a string appears in several files, prefer the one that renders this page/route.
-- EDIT TEXT: change only the copy. Keep interpolation, markup, JSX structure and translations intact. If the copy is split across elements, update the source so the rendered text matches.
+- EDIT TEXT: change only the copy. Keep links, interpolation, markup, JSX structure and translations intact. If the copy is split across elements, update the source so the rendered text matches.
 - REMOVE and MOVE: change the markup in the component or template (delete or reorder the element), rather than hiding or repositioning it with CSS.
 - NOTE: an instruction about that element; apply it.
 - CHANGE COLOR: swap the named Tailwind class. Use the class, not the hex, because the site may redefine palette colors. If Old has no class, set the color where it's defined (component prop, parent class or stylesheet).

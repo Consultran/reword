@@ -83,6 +83,172 @@ describe('commands', () => {
     expect(store.get().changes).toHaveLength(0);
   });
 
+  describe('text containing a link', () => {
+    const original = 'Read <a href="/guide">our guide</a> before you file today.';
+    const edit = async (newText: string) => {
+      document.body.innerHTML = `<p id="p">${original}</p>`;
+      await executeCommand('edit_text', { elementId: await idFor('#p'), newText });
+      return document.getElementById('p')!;
+    };
+
+    it('keeps the link when the words after it change', async () => {
+      const p = await edit('Read our guide before you file this week.');
+      expect(p.innerHTML).toBe('Read <a href="/guide">our guide</a> before you file this week.');
+    });
+
+    it('keeps the link when the words before it change', async () => {
+      const p = await edit('Please see our guide before you file today.');
+      expect(p.innerHTML).toBe('Please see <a href="/guide">our guide</a> before you file today.');
+    });
+
+    it('keeps the link when its own words change', async () => {
+      const p = await edit('Read the filing manual before you file today.');
+      expect(p.innerHTML).toBe('Read <a href="/guide">the filing manual</a> before you file today.');
+    });
+
+    it('adds a new word without gluing it to its neighbours', async () => {
+      const p = await edit('Read our guide carefully before you file today.');
+      expect(p.textContent).toBe('Read our guide carefully before you file today.');
+      expect(p.querySelector('a')!.getAttribute('href')).toBe('/guide');
+    });
+
+    it('puts the original back on undo', async () => {
+      const p = await edit('Read our guide before you file this week.');
+      await executeCommand('undo');
+      expect(p.innerHTML).toBe(original);
+    });
+
+    it('keeps the link in text with a line break', async () => {
+      document.body.innerHTML = '<p id="p">First line<br>See <a href="/x">the form</a> here</p>';
+      await executeCommand('edit_text', { elementId: await idFor('#p'), newText: 'First line\nSee the form now' });
+      expect(document.getElementById('p')!.innerHTML).toBe('First line<br>See <a href="/x">the form</a> now');
+    });
+
+    const editHtml = async (html: string, newText: string) => {
+      document.body.innerHTML = `<p id="p">${html}</p>`;
+      await executeCommand('edit_text', { elementId: await idFor('#p'), newText });
+      return document.getElementById('p')!;
+    };
+
+    it('handles changes on both sides of a link', async () => {
+      const p = await edit('Please read our guide before you file tomorrow.');
+      expect(p.innerHTML).toBe('Please read <a href="/guide">our guide</a> before you file tomorrow.');
+    });
+
+    it('keeps unchanged words out of the link when its words and later words change', async () => {
+      const p = await edit('Read the handbook before you file tomorrow.');
+      expect(p.innerHTML).toBe('Read <a href="/guide">the handbook</a> before you file tomorrow.');
+    });
+
+    it('puts a word added before a link outside it', async () => {
+      const p = await editHtml('See <a href="/d">docs</a> now.', 'See the docs now.');
+      expect(p.innerHTML).toBe('See the <a href="/d">docs</a> now.');
+    });
+
+    it('puts a word added after a link outside it', async () => {
+      const p = await editHtml('Read <a href="/g">our guide</a>.', 'Read our guide now.');
+      expect(p.innerHTML).toBe('Read <a href="/g">our guide</a> now.');
+    });
+
+    it('leaves no stray space when the last word is deleted', async () => {
+      const p = await edit('Read our guide before you file.');
+      expect(p.innerHTML).toBe('Read <a href="/guide">our guide</a> before you file.');
+    });
+
+    it('leaves one space when a middle word is deleted', async () => {
+      const p = await edit('Read our guide you file today.');
+      expect(p.innerHTML).toBe('Read <a href="/guide">our guide</a> you file today.');
+    });
+
+    it('applies an edit that only removes a space', async () => {
+      const p = await edit('Read ourguide before you file today.');
+      expect(p.innerHTML).toBe('Read <a href="/guide">ourguide</a> before you file today.');
+    });
+
+    it('keeps the link when the text contains an emoji', async () => {
+      const p = await editHtml('Read <a href="/g">our 😀 guide</a> 👍 today.', 'Read our 😀 guide 👍 tomorrow.');
+      expect(p.innerHTML).toBe('Read <a href="/g">our 😀 guide</a> 👍 tomorrow.');
+    });
+
+    it('keeps the link and hidden text when the section has hidden text', async () => {
+      const p = await editHtml('Read <a href="/g">our guide</a><span hidden> secret</span> today.', 'Read our guide tomorrow.');
+      expect(p.innerHTML).toBe('Read <a href="/g">our guide</a><span hidden=""> secret</span> tomorrow.');
+    });
+
+    it('removes a line break the edit removed, and restores it on undo', async () => {
+      const html = 'First line<br>See <a href="/x">the form</a> here';
+      const p = await editHtml(html, 'First line See the form here');
+      expect(p.innerHTML).toBe('First line See <a href="/x">the form</a> here');
+      await executeCommand('undo');
+      expect(p.innerHTML).toBe(html);
+    });
+
+    it('adds a line break without losing the link, and removes it on undo', async () => {
+      const p = await edit('Read our guide before\nyou file today.');
+      expect(p.innerHTML).toBe('Read <a href="/guide">our guide</a> before<br>you file today.');
+      await executeCommand('undo');
+      expect(p.innerHTML).toBe(original);
+    });
+
+    it.each([
+      ['a word before a link that starts the text', '<a href="/x">docs</a> now', 'See docs now', 'See <a href="/x">docs</a> now'],
+      ['a word after a link that ends the text', 'Read <a href="/x">docs</a>', 'Read docs now', 'Read <a href="/x">docs</a> now'],
+      ['a word between two links', 'See <a href="/a">foo</a> <a href="/b">bar</a>', 'See foo and bar', 'See <a href="/a">foo</a> and <a href="/b">bar</a>'],
+    ])('keeps %s outside the link', async (_name, html, newText, expected) => {
+      const p = await editHtml(html, newText);
+      expect(p.innerHTML).toBe(expected);
+      await executeCommand('undo');
+      expect(p.innerHTML).toBe(html);
+    });
+
+    it.each([
+      ['a changed word after a break', 'First<br>second', 'First next', 'First next'],
+      ['a break added beside a changed word', 'one two three', 'one\nnew three', 'one<br>new three'],
+      ['a deleted line, keeping the break', 'a<br>b<br>c', 'a\nc', 'a<br>c'],
+      ['a deleted line, joining the rest', 'a<br>b<br>c', 'a c', 'a c'],
+      ['a deleted last line', 'Hello<br>world', 'Hello', 'Hello'],
+      ['a deleted first line', 'Hello<br>world', 'world', 'world'],
+      ['a changed word before a new break', 'alpha beta gamma', 'ALPHA\nbeta gamma', 'ALPHA<br>beta gamma'],
+    ])('handles line breaks with %s', async (_name, html, newText, expected) => {
+      const p = await editHtml(html, newText);
+      expect(p.innerHTML).toBe(expected);
+      await executeCommand('undo');
+      expect(p.innerHTML).toBe(html);
+    });
+
+    it('removes a link whose words were all deleted, and restores it on undo', async () => {
+      const html = 'See <a class="btn" href="/d">Get started</a> today.';
+      const p = await editHtml(html, 'See today.');
+      expect(p.querySelector('a')).toBeNull();
+      expect(p.textContent!.replace(/\s+/g, ' ')).toBe('See today.');
+      await executeCommand('undo');
+      expect(p.innerHTML).toBe(html);
+    });
+
+    it('keeps an image link when its words are deleted', async () => {
+      const p = await editHtml('See <a href="/d"><img src="x.png">Docs</a> today.', 'See today.');
+      expect(p.querySelector('a img')).not.toBeNull();
+    });
+
+    it('keeps joined emoji in new text intact', async () => {
+      const family = '👨‍👩‍👧‍👦';
+      const p = await editHtml('Read <a href="/g">our guide</a> today.', `Read our guide ${family} today.`);
+      expect(p.textContent).toContain(family);
+    });
+
+    it('can remove a line break written directly in preformatted text', async () => {
+      const p = await editHtml('<span style="white-space: pre">First\nsecond</span>', 'First second');
+      expect(p.textContent).toBe('First second');
+    });
+
+    it('restores everything on undo after changes in several places', async () => {
+      const p = await edit('Please read the handbook now.');
+      expect(p.querySelector('a')!.getAttribute('href')).toBe('/guide');
+      await executeCommand('undo');
+      expect(p.innerHTML).toBe(original);
+    });
+  });
+
   it('collapses repeated edits and drops edits back to the original', async () => {
     const id = await idFor('#b');
     await executeCommand('edit_text', { elementId: id, newText: 'A' });
