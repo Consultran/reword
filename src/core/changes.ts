@@ -100,6 +100,40 @@ export function serialize(change: Change): Record<string, unknown> {
   return out;
 }
 
+/** Compares a change's saved content. Key order is ignored because browser storage can reorder keys. */
+export function changeFingerprint(change: Change): string {
+  return JSON.stringify(serialize(change), (_key, value: unknown) =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : value,
+  );
+}
+
+/**
+ * Combines this tab's list with the saved one. `lastSeen` is the saved list this
+ * tab last knew about, which tells "I removed it" apart from "someone else added it".
+ */
+export function mergeChanges(lastSeen: Map<string, string>, mine: Change[], saved: Change[]): Change[] {
+  const mineById = new Map(mine.map((c) => [c.id, c]));
+  const changedHere = (c: Change) => lastSeen.get(c.id) !== changeFingerprint(c);
+
+  const merged = saved.flatMap((theirs) => {
+    const own = mineById.get(theirs.id);
+    // Gone here: honor that only if the saved copy is still the one this tab removed.
+    if (!own) return lastSeen.get(theirs.id) === changeFingerprint(theirs) ? [] : [theirs];
+    const changedElsewhere = changeFingerprint(own) !== changeFingerprint(theirs);
+    return [changedElsewhere && !changedHere(own) ? theirs : own];
+  });
+
+  const savedIds = new Set(saved.map((c) => c.id));
+  for (const c of mine) {
+    if (savedIds.has(c.id) || !changedHere(c)) continue;
+    const lastOnPage = merged.map((m) => m.page.key).lastIndexOf(c.page.key);
+    merged.splice(lastOnPage === -1 ? merged.length : lastOnPage + 1, 0, c);
+  }
+  return merged;
+}
+
 /** Stored data from older versions (or another tool) is dropped rather than half-applied. */
 export function isStoredChange(value: unknown): value is Change {
   const c = value as Partial<Change> | null;

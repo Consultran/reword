@@ -56,6 +56,8 @@ The panel sits at the bottom right. Drag it by its header, or collapse it.
 - **Extension:** saved in `chrome.storage.local`, per origin. It survives a browser restart, so a review can span several days. Click **Clear all** after you send the prompt, or the old changes go into the next one.
 - **Other flavours:** saved in `sessionStorage`, per tab.
 
+Each save merges with what is already stored, so the Back button or a second tab on the same site doesn't lose other edits. If two tabs change the same edit, the latest change wins. On `https` and `localhost`, tabs take turns saving. On plain `http`, two tabs saving at the same instant can still overwrite each other.
+
 When the page loads or re-renders, changes are matched back to elements by selector (and, for text edits, by their text). A change whose element can't be found stays in the list, marked *Not on page*, and still goes into the prompt. Nothing on the page changes while Reword is closed.
 
 ## The prompt
