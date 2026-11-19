@@ -6,14 +6,15 @@ import { validate } from "./validate";
 import type { Change, ColorChange, ColorValue, EditChange, MoveChange, NoteChange, RemoveChange } from "./changes";
 import { parseColor } from "./color";
 import { detectClass, nearest, newClassName, paletteFor, parseToken, sameColor, type ClassMatch, type ColorProperty, type Palette } from "./palette";
-import { contextHtml, sectionOf, segmentsOf, snippet, sourceHints, stableSelector, textOf } from "./describe";
+import { contextHtml, sectionOf, segmentsOf, snippet, sourceHints, stableSelector, textOf, textTargetOf } from "./describe";
 import * as engine from "./engine";
 import { buildPrompt } from "./prompt";
 import { find, outline } from "./query";
 import { elementOf, idOf } from "./registry";
 import * as session from "./session";
 import { store } from "./store";
-import { copyText } from "./ui/root";
+import { buildSummary } from "./summary";
+import { copyRichText, copyText } from "./ui/root";
 
 export interface CommandResult<T = unknown> {
   ok: boolean;
@@ -44,6 +45,7 @@ function base(el: Element, elementId: string) {
     contextHtml: contextHtml(el),
     segments: segmentsOf(el),
     sourceHints: sourceHints(el),
+    textTarget: textTargetOf(el),
   };
 }
 
@@ -229,6 +231,18 @@ const handlers: Record<CommandName, Handler> = {
     await copyText(prompt);
     store.set({ toast: { text: "Copied", at: Date.now() } });
     return { prompt, count: session.changes().length };
+  },
+
+  get_summary() {
+    return { ...buildSummary(session.changes()), count: session.changes().length };
+  },
+
+  async copy_summary() {
+    const changes = session.changes();
+    if (!changes.length) throw new CommandError("There are no changes to summarize");
+    const summary = buildSummary(changes);
+    await copyRichText(summary.html, summary.text);
+    return { ...summary, count: changes.length };
   },
 
   find_elements(params: { query?: string; text?: string; selector?: string; limit?: number }) {

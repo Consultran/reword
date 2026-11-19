@@ -233,6 +233,18 @@ function checkPrompt(prompt, label) {
   fs.writeFileSync(out('fixture-prompt.md'), prompt);
   checkPrompt(prompt, 'extension');
 
+  // The readable summary reaches the clipboard with formatting and links.
+  await page.locator('reword-overlay .copy-summary').click();
+  await page.waitForTimeout(200);
+  const summary = await page.evaluate(async () => {
+    const [item] = await navigator.clipboard.read();
+    return { html: await (await item.getType('text/html')).text(), text: await (await item.getType('text/plain')).text() };
+  });
+  assert(summary.text.startsWith('Website edits for localhost') && summary.text.includes('1. '), 'summary has a plain-text version');
+  assert(summary.html.includes('<s>') && summary.html.includes('View on page') && summary.html.includes('#:~:text='), 'summary is formatted with page links');
+  assert(!summary.text.includes('selector'), 'summary leaves out technical details');
+  assert((await page.locator('reword-overlay .copy-help').textContent()).includes('Paste it'), 'summary button confirms the copy');
+
   // Commands from another extension context reach the page.
   const found = await sw.evaluate(async () => {
     const [t] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
@@ -287,6 +299,17 @@ function checkPrompt(prompt, label) {
   assert(decodeURIComponent(bm.slice('javascript:'.length)) === code.trim(), 'bookmarklet decodes to reword.js');
   const bprompt = await scenario(bpage, () => bpage.evaluate(code), () => bpage.evaluate(() => window.Reword.getPrompt()));
   checkPrompt(bprompt, 'bookmarklet');
+
+  // When the modern clipboard call is refused, the summary keeps its formatting.
+  await bctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://localhost:4599' });
+  await bpage.evaluate(() => { navigator.clipboard.write = () => Promise.reject(new Error('blocked')); });
+  await bpage.locator('reword-overlay .copy-summary').click();
+  await bpage.waitForTimeout(200);
+  const fallback = await bpage.evaluate(async () => {
+    const [item] = await navigator.clipboard.read();
+    return { types: item.types, html: item.types.includes('text/html') ? await (await item.getType('text/html')).text() : '' };
+  });
+  assert(fallback.html.includes('View on page'), `summary stays formatted when the clipboard call is refused ${JSON.stringify(fallback.types)}`);
   const enforced = await bpage.evaluate(() => { try { document.createElement('div').innerHTML = '<b>x</b>'; return false; } catch { return true; } });
   assert(enforced, 'strict policy is enforced (innerHTML throws)');
   const violations = await bpage.evaluate(() => window.__violations.filter((v) => !v.includes('trusted-types') || !v.includes('<b>x</b>')));

@@ -1,7 +1,11 @@
 // Describes elements for prompts and AI callers: stable CSS selectors, section
 // hints, text snippets and truncated context HTML.
+import type { TextTarget } from "./changes";
 import { extractText } from "./text";
 
+const WORDS_AT_EACH_END = 5;
+const MAX_WORDS_MATCHED_WHOLE = 10;
+const NEARBY_WORDS = 3;
 const TEST_ATTRS = ["data-testid", "data-test-id", "data-test", "data-cy", "data-qa"];
 const IGNORED_DATA = /^data-(v-|reactid|react|radix|headlessui|state|orientation|side|align|aria|rk|framer|sentry|gtm|ga|analytics|track|ved|hveid|view-component|turbo|n-|nimg|nextjs|styled|emotion|reword)/;
 
@@ -151,6 +155,43 @@ export const HOST_TAG = "reword-overlay";
  */
 export function textOf(el: Element): string {
   return extractText(el).text;
+}
+
+const wordsIn = (text: string) => text.split(/\s+/).filter(Boolean);
+
+/** What to search for to find this text: all of it when short, otherwise its first and last words. */
+export function textTargetFor(text: string): TextTarget | null {
+  const lines = text.split("\n").map(wordsIn).filter((words) => words.some((word) => /[\p{L}\p{N}]/u.test(word)));
+  if (!lines.length) return null;
+  const first = lines[0]!;
+  const last = lines[lines.length - 1]!;
+  if (lines.length === 1 && first.length <= MAX_WORDS_MATCHED_WHOLE) return { start: first.join(" ") };
+  return { start: first.slice(0, WORDS_AT_EACH_END).join(" "), end: last.slice(-WORDS_AT_EACH_END).join(" ") };
+}
+
+function nearbyWords(nodes: Text[], from: number, step: -1 | 1): string | undefined {
+  let words: string[] = [];
+  for (let i = from; i >= 0 && i < nodes.length && words.length < NEARBY_WORDS; i += step) {
+    const found = wordsIn(nodes[i]!.data);
+    words = step < 0 ? [...found, ...words] : [...words, ...found];
+  }
+  const nearest = step < 0 ? words.slice(-NEARBY_WORDS) : words.slice(0, NEARBY_WORDS);
+  return nearest.join(" ") || undefined;
+}
+
+const countMatches = (text: string, phrase: string) => text.toLowerCase().split(phrase.toLowerCase()).length - 1;
+
+/** The original visible text of an element, with nearby words when the same text appears again on the page. */
+export function textTargetOf(el: Element): TextTarget | null {
+  const target = textTargetFor(originalText(el) ?? textOf(el));
+  if (!target) return null;
+  const page = extractText(document.body);
+  if (countMatches(page.text.replace(/\s+/g, " "), target.start) < 2) return target;
+  const own = extractText(el).textNodes;
+  const firstIndex = own[0] ? page.textNodes.indexOf(own[0]) : -1;
+  const lastIndex = own.length ? page.textNodes.indexOf(own[own.length - 1]!) : -1;
+  if (firstIndex < 0 || lastIndex < 0) return target;
+  return { ...target, before: nearbyWords(page.textNodes, firstIndex - 1, -1), after: nearbyWords(page.textNodes, lastIndex + 1, 1) };
 }
 
 /** Text as rendered (innerText). Cheaper than textOf; used for matching search queries. */

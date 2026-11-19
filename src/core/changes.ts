@@ -10,6 +10,14 @@ export interface PageRef {
   title: string;
 }
 
+/** Words a "View on page" link searches for. `before` and `after` tell repeated text apart. */
+export interface TextTarget {
+  start: string;
+  end?: string;
+  before?: string;
+  after?: string;
+}
+
 interface BaseChange {
   id: string;
   page: PageRef;
@@ -27,6 +35,8 @@ interface BaseChange {
   segments: string[];
   /** Framework/tooling data attributes found on the element or its ancestors. */
   sourceHints: string[];
+  /** Original visible text to link to; null when the element has none. Missing on older saved changes. */
+  textTarget?: TextTarget | null;
 }
 
 export interface EditChange extends BaseChange {

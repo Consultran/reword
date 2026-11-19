@@ -48,6 +48,7 @@ The panel sits at the bottom right. Drag it by its header, or collapse it.
 - A numbered list of your changes: ~~old~~ → new for text edits, plus removes, notes and moves. Click an item to scroll to the element and flash it. **×** reverts that change.
 - **Undo** and **Redo**, also **⌘/Ctrl+Z** and **⌘/Ctrl+Shift+Z** when you're not typing.
 - **Clear all** reverts everything, with an inline **Undo** for 8 seconds.
+- **Copy summary** copies a readable version for an email or Google Doc: each change in panel order, with a **View on page** link that scrolls to the text and highlights it. Links look for the current wording, so after an edit goes live the link opens the page without jumping to the spot.
 - **Copy prompt (N)**, or **⌘/Ctrl+Shift+C**. Chrome may keep ⌘⇧C for DevTools while DevTools is open, so use the button then.
 
 **Several pages.** Keep marking up as you move around the site (hold Alt and click a link). Changes from every page of the site go into one session and one prompt, grouped by page. Only the current page's changes are applied live; click a change from another page to go there. Client-side route changes in single-page apps are followed too.

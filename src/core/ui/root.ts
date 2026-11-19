@@ -152,7 +152,34 @@ export async function copyText(text: string): Promise<void> {
   } catch {
     // Fall through.
   }
+  copyThroughHiddenField(text);
+}
+
+/** Copies formatted text with a plain version for apps that can't take formatting. */
+export async function copyRichText(html: string, text: string): Promise<void> {
+  try {
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "text/html": new Blob([html], { type: "text/html" }),
+        "text/plain": new Blob([text], { type: "text/plain" }),
+      }),
+    ]);
+    return;
+  } catch {
+    // Fall through.
+  }
+  const fillClipboard = (e: ClipboardEvent) => {
+    e.clipboardData?.setData("text/html", html);
+    e.clipboardData?.setData("text/plain", text);
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  };
+  copyThroughHiddenField(text, fillClipboard);
+}
+
+function copyThroughHiddenField(text: string, onCopy?: (e: ClipboardEvent) => void) {
   const ta = document.createElement("textarea");
+  if (onCopy) ta.addEventListener("copy", onCopy);
   ta.value = text;
   ta.setAttribute("readonly", "");
   ta.style.position = "fixed";

@@ -1,4 +1,4 @@
-// The floating changes panel: list, undo/redo, clear all, copy prompt.
+// The floating changes panel: list, undo/redo, clear all, copy summary and prompt.
 import type { Change, ColorValue } from "../changes";
 import { executeCommand } from "../commands";
 import { truncate } from "../describe";
@@ -80,7 +80,8 @@ export function createPanel({ prefs, siteToggle }: Pick<RewordOptions, "prefs" |
   const undoBtn = h("button", { class: "btn quiet", title: `Undo (${MOD}+Z)` }, icon("undo"), h("span", {}, "Undo"));
   const redoBtn = h("button", { class: "btn quiet", title: `Redo (${MOD}+Shift+Z)` }, icon("redo"), h("span", {}, "Redo"));
   const clearBtn = h("button", { class: "btn danger" }, "Clear all");
-  const copyBtn = h("button", { class: "btn primary copy", title: `Copy prompt (${MOD}+Shift+C)` });
+  const summaryBtn = h("button", { class: "btn copy-summary", title: "Copy a readable version for email or Google Docs" });
+  const copyBtn = h("button", { class: "btn primary copy", title: `Copy prompt for a coding agent (${MOD}+Shift+C)` });
   const siteBox = h("input", { type: "checkbox" });
   const siteRow = siteToggle
     ? h("label", { class: "site", title: `Press E on ${location.hostname} to open or close Reword` }, siteBox, "Open with ", kbd("E"), " on this site")
@@ -95,7 +96,7 @@ export function createPanel({ prefs, siteToggle }: Pick<RewordOptions, "prefs" |
     { class: "body" },
     list,
     h("div", { class: "tools" }, undoBtn, redoBtn, h("span", { class: "grow" }), clearBtn),
-    copyBtn,
+    h("div", { class: "copy-row" }, summaryBtn, copyBtn),
     copyHelp,
     h("div", { class: "foot" }, h("span", {}, "Hold ", kbd("Alt"), " to use the page normally"), siteRow),
   );
@@ -123,10 +124,17 @@ export function createPanel({ prefs, siteToggle }: Pick<RewordOptions, "prefs" |
   });
 
   let copyTimer = 0;
-  let copyState: { label: string; kind: "done" | "error"; help?: string } | null = null;
+  let copyState: { target: "prompt" | "summary"; label: string; kind: "done" | "error"; help?: string } | null = null;
+  const copyFailed = (target: "prompt" | "summary", error?: string) =>
+    flashCopy({ target, label: "Copy failed", kind: "error", help: `${error ?? "The clipboard isn’t available"}. Try again, or click the page first.` });
   copyBtn.addEventListener("click", async () => {
     const res = await executeCommand("copy_prompt");
-    if (!res.ok) flashCopy({ label: "Copy failed", kind: "error", help: `${res.error ?? "The clipboard isn’t available"}. Try again, or click the page first.` });
+    if (!res.ok) copyFailed("prompt", res.error);
+  });
+  summaryBtn.addEventListener("click", async () => {
+    const res = await executeCommand("copy_summary");
+    if (res.ok) flashCopy({ target: "summary", label: "Copied", kind: "done", help: "Paste it into an email or a Google Doc." });
+    else copyFailed("summary", res.error);
   });
   const flashCopy = (state: NonNullable<typeof copyState>) => {
     copyState = state;
@@ -206,7 +214,7 @@ export function createPanel({ prefs, siteToggle }: Pick<RewordOptions, "prefs" |
   function render(s: State) {
     if (s.toast && s.toast.at !== lastToast) {
       lastToast = s.toast.at;
-      flashCopy({ label: s.toast.text, kind: "done" });
+      flashCopy({ target: "prompt", label: s.toast.text, kind: "done" });
       return;
     }
     const n = s.changes.length;
@@ -217,15 +225,22 @@ export function createPanel({ prefs, siteToggle }: Pick<RewordOptions, "prefs" |
     setDisabled(undoBtn, !s.canUndo);
     setDisabled(redoBtn, !s.canRedo);
     setDisabled(clearBtn, n === 0);
-    copyBtn.classList.toggle("done", copyState?.kind === "done");
-    copyBtn.classList.toggle("error", copyState?.kind === "error");
-    copyBtn.replaceChildren(
-      h("span", { class: "copy-icon" }, icon(copyState ? (copyState.kind === "done" ? "check" : "warn") : "copy")),
-      h("span", {}, copyState?.label ?? "Copy prompt"),
-      copyState ? "" : h("span", { class: "copy-count" }, String(n)),
-    );
+    setDisabled(summaryBtn, n === 0);
+    const renderCopyButton = (btn: HTMLButtonElement, target: "prompt" | "summary", label: string, countLabel: string) => {
+      const state = copyState?.target === target ? copyState : null;
+      btn.classList.toggle("done", state?.kind === "done");
+      btn.classList.toggle("error", state?.kind === "error");
+      btn.replaceChildren(
+        h("span", { class: "copy-icon" }, icon(state ? (state.kind === "done" ? "check" : "warn") : "copy")),
+        h("span", {}, state?.label ?? label),
+        state || !countLabel ? "" : h("span", { class: "copy-count" }, countLabel),
+      );
+    };
+    renderCopyButton(summaryBtn, "summary", "Copy summary", "");
+    renderCopyButton(copyBtn, "prompt", "Copy prompt", String(n));
     copyHelp.textContent = copyState?.help ?? "";
     copyHelp.classList.toggle("show", !!copyState?.help);
+    copyHelp.classList.toggle("ok", copyState?.kind === "done");
     if (undoOffer && s.changes !== undoOffer.after) dismissUndo();
 
     const offerKey = undoOffer ? undoOffer.timer : 0;

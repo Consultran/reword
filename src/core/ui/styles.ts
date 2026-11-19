@@ -291,7 +291,7 @@ kbd {
 
 .panel .list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; flex: 1 1 auto; min-height: 0; overscroll-behavior: contain; }
 /* Only the list gives up height when the panel is capped; the chrome around it never shrinks. */
-.panel .head, .panel .tools, .panel .copy, .panel .copy-help, .panel .foot { flex: none; }
+.panel .head, .panel .tools, .panel .copy-row, .panel .copy-help, .panel .foot { flex: none; }
 .panel .list::-webkit-scrollbar { width: 10px; }
 .panel .list::-webkit-scrollbar-thumb { background: var(--color-line-strong); border-radius: 5px; border: 3px solid var(--color-bg); }
 .panel .empty { padding: 12px 10px; color: var(--color-ink-2); line-height: 1.55; text-wrap: pretty; }
@@ -358,15 +358,17 @@ kbd {
 .item .x:focus-visible { opacity: 1; }
 
 .panel .tools { display: flex; align-items: center; gap: 4px; padding: 8px 8px 0; box-shadow: inset 0 1px 0 var(--color-line); }
-.panel .copy { margin: 8px 8px 0; height: 36px; font-size: 13px; font-weight: 600; gap: 8px; }
+.panel .copy-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 8px 0; }
+.panel .copy, .panel .copy-summary { min-width: 0; height: 36px; padding: 0 8px; font-size: 13px; font-weight: 600; gap: 6px; }
 .panel .copy .copy-count {
   min-width: 20px; height: 18px; padding: 0 5px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 600; background: var(--color-count-bg); color: var(--color-count-ink);
 }
 .panel .copy-icon { display: flex; }
-.panel .copy.error, .panel .copy.error svg { color: var(--color-danger-ink); }
-.panel .copy.error { background: var(--color-danger); }
+.panel .copy.error, .panel .copy.error svg, .panel .copy-summary.error, .panel .copy-summary.error svg { color: var(--color-danger-ink); }
+.panel .copy.error, .panel .copy-summary.error { background: var(--color-danger); }
 .panel .copy-help { display: none; padding: 6px 12px 0; color: var(--color-danger); font-size: 12px; line-height: 1.4; }
+.panel .copy-help.ok { color: var(--color-ink-2); }
 .panel .copy-help.show { display: block; }
 .panel .foot { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 11px; color: var(--color-ink-3); font-size: 11.5px; }
 .panel .foot > span, .panel .site { display: flex; align-items: center; gap: 5px; }

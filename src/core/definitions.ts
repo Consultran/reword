@@ -122,6 +122,8 @@ export const COMMAND_DEFINITIONS = [
   { name: "list_changes", description: "Return the current list of changes, in prompt order.", parameters: noParams },
   { name: "get_prompt", description: "Return the prompt text describing all changes, for a coding agent.", parameters: noParams },
   { name: "copy_prompt", description: "Copy the prompt text to the clipboard. Returns the copied text.", parameters: noParams },
+  { name: "get_summary", description: "Return a readable summary of all changes for people, as formatted HTML and plain text.", parameters: noParams },
+  { name: "copy_summary", description: "Copy the readable summary to the clipboard, formatted for email and documents.", parameters: noParams },
   {
     name: "find_elements",
     description:

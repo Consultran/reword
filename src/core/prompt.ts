@@ -88,7 +88,11 @@ const pageLine = (url: string, title: string) => `Page: ${url}  |  Title: ${titl
 
 /** The change list as JSON, without runtime fields, for agents that prefer structured input. */
 export function toJSON(changes: Change[]) {
-  return changes.map((c, i) => ({ number: i + 1, ...serialize(c) }));
+  return changes.map((c, i) => {
+    const data = serialize(c);
+    delete data.textTarget; // Only the readable summary's links use this.
+    return { number: i + 1, ...data };
+  });
 }
 
 /** Changes are numbered in list order, which is grouped by page; numbers match the panel. */
